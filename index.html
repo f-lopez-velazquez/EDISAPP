@@ -19,7 +19,7 @@
       <ul id="song-list"></ul>
     </aside>
     <section id="song-editor-section">
-      <form id="song-form">
+      <form id="song-form" autocomplete="off">
         <label>
           Título:
           <input type="text" id="song-title" required />
@@ -29,14 +29,14 @@
           <textarea id="letra-in" rows="6" required></textarea>
         </label>
         <label>
-          Instrumento:
+          Instrumento principal:
           <select id="instrumento">
             <option value="guitarra">Guitarra (6)</option>
             <option value="laud">Laúd (6)</option>
             <option value="bandurria">Bandurria (6)</option>
-            <option value="mandolina">Mandolina (4)</option>
-            <option value="tricordio">Tricordio (4)</option>
+            <option value="mandolina">Mandolina/Tricordio (4)</option>
             <option value="contrabajo">Contrabajo (4)</option>
+            <option value="guitarron">Guitarrón (6)</option>
           </select>
         </label>
         <label>
@@ -45,7 +45,11 @@
         </label>
         <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
         <div class="editor-group">
-          <h3>Editor de Tablatura (<span id="instr-span"></span>)</h3>
+          <h3>
+            Editor de Tablatura 
+            <span id="tabs-voz"></span>
+          </h3>
+          <div id="tabs-voz-btns"></div>
           <div id="tablatura"></div>
           <button id="add-col" type="button">+ Tiempo</button>
           <button id="del-col" type="button">- Tiempo</button>
@@ -60,12 +64,15 @@
         </div>
         <div style="margin-top:18px;">
           <button id="save-song" type="submit">Guardar canción</button>
+          <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
           <button id="cancel-edit" type="button" style="background:#888;margin-left:8px;">Cancelar</button>
         </div>
+        <div id="last-saved" style="font-size:0.95em; color:#999;margin-top:6px;"></div>
       </form>
     </section>
   </main>
   <div id="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.9.2/dist/html2pdf.bundle.min.js"></script>
   <script type="module" src="main.js"></script>
 </body>
 </html>
