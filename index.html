@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cancionero Estudiantina FIMEE</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <header>
+    <h1>Cancionero Estudiantina FIMEE</h1>
+    <input type="search" id="search" placeholder="Buscar canción..."/>
+  </header>
+  <main>
+    <aside id="song-list"></aside>
+    <section id="song-view">
+      <div class="song-header">
+        <h2 id="song-title"></h2>
+        <input type="file" id="audio-upload" accept="audio/*" style="display:none"/>
+        <button id="audio-btn">Subir audio</button>
+        <audio controls id="audio-player" style="display:none"></audio>
+      </div>
+      <nav id="instrument-tabs"></nav>
+      <div id="instrument-content"></div>
+      <hr/>
+      <h3>Letra y Acordes</h3>
+      <div id="lyrics-editor"></div>
+      <button id="save-btn">Guardar cambios</button>
+    </section>
+  </main>
+  <div id="modal" class="hidden"></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
