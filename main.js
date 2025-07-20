@@ -3,7 +3,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/fireba
 import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
 
-// ---- Firebase Config ----
 const firebaseConfig = {
   apiKey: "AIzaSyDtShAFym0sPrrkocsY48oAB2W4wbUD9ZY",
   authDomain: "edisapp-54c5c.firebaseapp.com",
@@ -16,7 +15,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ---- Instrumentos y voces ----
 const INSTRUMENTS = {
   guitarra: 6,
   laud: 6,
@@ -115,7 +113,7 @@ function clearEditor() {
   audioPlayer.src = "";
   audioPlayer.style.display = "none";
   renderTabsVozBtns("guitarra");
-  renderTablatureEditor();
+  renderTablatureEditorSVG();
   renderLetraEditor();
   renderRasgueoEditor();
 }
@@ -127,7 +125,6 @@ function fillFormFromSong(song) {
   instrSpan.textContent = "";
   tabData = song.tablatura || {};
   if(!tabData) tabData = {};
-  // Para instrumentos sin voces, setea "Principal"
   for(const voz of (VOICES[song.instrumento]||["Principal"])) {
     if(!tabData[voz]) tabData[voz] = createEmptyTab(song.instrumento, DEFAULT_BEATS);
   }
@@ -138,7 +135,7 @@ function fillFormFromSong(song) {
   audioPlayer.style.display = song.audioUrl ? "" : "none";
   audioPlayer.src = song.audioUrl || "";
   renderTabsVozBtns(song.instrumento);
-  renderTablatureEditor();
+  renderTablatureEditorSVG();
   renderLetraEditor();
   renderRasgueoEditor();
 }
@@ -146,20 +143,19 @@ function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr];
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-// ============ 2. Tablatura multi-voz + editor =============
+
+// ============ 2. Tablatura multi-voz + SVG PRO =============
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
-  // Cambia a primer voz siempre
   currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
   if(!tabData) tabData = {};
   for(const voz of (VOICES[currentInstrument]||["Principal"])) {
     if(!tabData[voz]) tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
   }
   renderTabsVozBtns(currentInstrument);
-  renderTablatureEditor();
+  renderTablatureEditorSVG();
   renderRasgueoEditor();
 };
-
 function renderTabsVozBtns(instr) {
   const voces = VOICES[instr] || ["Principal"];
   tabsVozBtns.innerHTML = "";
@@ -168,88 +164,148 @@ function renderTabsVozBtns(instr) {
     btn.textContent = vz;
     btn.className = "voz-btn";
     if (vz === currentVoice) btn.classList.add("active");
-    btn.onclick = (e)=>{ e.preventDefault(); currentVoice = vz; renderTablatureEditor(); };
+    btn.onclick = (e)=>{ e.preventDefault(); currentVoice = vz; renderTablatureEditorSVG(); };
     tabsVozBtns.appendChild(btn);
   });
 }
-
 addColBtn.onclick = () => {
   let t = tabData[currentVoice];
   for (let s = 0; s < t.length; s++) t[s].push("");
-  renderTablatureEditor();
+  renderTablatureEditorSVG();
 };
 delColBtn.onclick = () => {
   let t = tabData[currentVoice];
   if (t[0].length > 1) {
     for (let s = 0; s < t.length; s++) t[s].pop();
-    renderTablatureEditor();
+    renderTablatureEditorSVG();
   }
 };
-
-function renderTablatureEditor() {
+// ======= SVG Tablatura PRO (círculo sobre cuerda, trino, etc) ==========
+function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
-  let t = tabData[currentVoice];
+
+  const t = tabData[currentVoice];
   if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
   const numStrings = t.length;
   const numBeats = t[0].length;
-  const table = document.createElement("table");
-  table.className = "tablature-table";
+  const width = 48 * numBeats + 10;
+  const height = 30 * (numStrings-1) + 30;
+
+  let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.style.background = "#fafafc";
+  svg.style.borderRadius = "10px";
+  svg.style.boxShadow = "0 2px 10px #0001";
+
+  // Cuerdas
   for (let s = 0; s < numStrings; s++) {
-    const tr = document.createElement("tr");
-    for (let b = 0; b < numBeats; b++) {
-      const td = document.createElement("td");
-      // Vertical tenue con border-right en CSS
-      // Render círculo si existe valor
-      if (t[s][b] !== "") {
-        const circle = document.createElement("span");
-        circle.className = "tablature-fret";
-        if (typeof t[s][b] === "object" && t[s][b].val !== undefined) {
-          circle.textContent = t[s][b].val;
-          if (t[s][b].trino) circle.classList.add("trino");
-        } else {
-          circle.textContent = t[s][b];
-        }
-        td.appendChild(circle);
-      }
-      td.onclick = () => {
-        td.classList.add("selected");
-        let val = (typeof t[s][b] === "object") ? t[s][b].val : t[s][b];
-        let trino = (typeof t[s][b] === "object") ? !!t[s][b].trino : false;
-        td.innerHTML = `<input type="number" min="0" max="24" value="${val||""}" style="width:27px; font-size:1em;" />
-        <button style="margin-left:5px;" id="trino-btn" ${trino?'data-on="1"':''}>~</button>`;
-        const input = td.querySelector("input");
-        const trinoBtn = td.querySelector("#trino-btn");
-        input.focus();
-        input.onblur = () => {
-          let valNum = input.value || "";
-          if (trinoBtn && trinoBtn.dataset.on==="1" && valNum) {
-            t[s][b] = {val: valNum, trino: true};
-          } else if (valNum) {
-            t[s][b] = valNum;
-          } else t[s][b] = "";
-          renderTablatureEditor();
-        };
-        input.onkeydown = (e) => { if (e.key === "Enter" || e.key === "Tab") input.blur(); };
-        if (trinoBtn) {
-          trinoBtn.onclick = (e)=>{
-            e.preventDefault(); e.stopPropagation();
-            if (trinoBtn.dataset.on==="1") {
-              trinoBtn.dataset.on="0";
-              trinoBtn.style.background="#eee";
-            } else {
-              trinoBtn.dataset.on="1";
-              trinoBtn.style.background="#ffe082";
-            }
-            input.focus();
-          };
-        }
-      };
-      tr.appendChild(td);
-    }
-    table.appendChild(tr);
+    let y = 15 + s*30;
+    let line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1", 0);
+    line.setAttribute("y1", y);
+    line.setAttribute("x2", width);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "#bbb");
+    line.setAttribute("stroke-width", "2");
+    svg.appendChild(line);
   }
-  tablaturaDiv.appendChild(table);
+  // Líneas verticales tenues
+  for (let b = 0; b < numBeats; b++) {
+    let x = 24 + b*48;
+    let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
+    vline.setAttribute("x1", x);
+    vline.setAttribute("y1", 10);
+    vline.setAttribute("x2", x);
+    vline.setAttribute("y2", height-10);
+    vline.setAttribute("stroke", "#e0deee");
+    vline.setAttribute("stroke-width", "1");
+    svg.appendChild(vline);
+  }
+  // Números/círculos
+  for (let s = 0; s < numStrings; s++) {
+    let y = 15 + s*30;
+    for (let b = 0; b < numBeats; b++) {
+      let valObj = t[s][b];
+      let val = "", trino = false;
+      if(typeof valObj === "object" && valObj) {
+        val = valObj.val;
+        trino = !!valObj.trino;
+      } else {
+        val = valObj;
+      }
+      if(val) {
+        let x = 24 + b*48;
+        let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.style.cursor = "pointer";
+        let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", 13);
+        circle.setAttribute("fill", "#3b306c");
+        circle.setAttribute("stroke", "#e7e5f1");
+        circle.setAttribute("stroke-width", "2");
+        g.appendChild(circle);
+
+        let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        txt.setAttribute("x", x);
+        txt.setAttribute("y", y+5);
+        txt.setAttribute("text-anchor", "middle");
+        txt.setAttribute("fill", "#fff");
+        txt.setAttribute("font-size", "17");
+        txt.setAttribute("font-weight", "bold");
+        txt.textContent = val;
+        g.appendChild(txt);
+
+        if(trino) {
+          let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          trinoTxt.setAttribute("x", x);
+          trinoTxt.setAttribute("y", y-15);
+          trinoTxt.setAttribute("text-anchor", "middle");
+          trinoTxt.setAttribute("fill", "#eb9b00");
+          trinoTxt.setAttribute("font-size", "22");
+          trinoTxt.setAttribute("font-weight", "bold");
+          trinoTxt.textContent = "~";
+          g.appendChild(trinoTxt);
+        }
+        g.onclick = (e) => {
+          e.stopPropagation();
+          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", val);
+          if(nuevo!==null && nuevo!=="") {
+            let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
+            t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
+          } else {
+            t[s][b] = "";
+          }
+          renderTablatureEditorSVG();
+        };
+        svg.appendChild(g);
+      } else {
+        // Click sobre la cuerda vacía
+        let x = 24 + b*48;
+        let clickArea = document.createElementNS("http://www.w3.org/2000/svg","rect");
+        clickArea.setAttribute("x", x-13);
+        clickArea.setAttribute("y", y-13);
+        clickArea.setAttribute("width", 26);
+        clickArea.setAttribute("height", 26);
+        clickArea.setAttribute("fill", "rgba(255,255,255,0)");
+        clickArea.style.cursor = "pointer";
+        clickArea.onclick = (e) => {
+          e.stopPropagation();
+          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
+          if(nuevo!==null && nuevo!=="") {
+            let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
+            t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
+          }
+          renderTablatureEditorSVG();
+        };
+        svg.appendChild(clickArea);
+      }
+    }
+  }
+  tablaturaDiv.appendChild(svg);
 }
+
 // ========== 3. Letra y acordes =============
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
@@ -257,7 +313,6 @@ function renderLetraEditor() {
     const span = document.createElement("span");
     span.className = "lyric-chunk";
     span.textContent = letraOriginal[i];
-    // Acorde arriba
     if (acordesArriba[i]) {
       const chord = document.createElement("span");
       chord.className = "chord-above";
@@ -306,7 +361,6 @@ function renderRasgueoEditor() {
     seq.appendChild(icon);
   });
   rasgueoDiv.appendChild(seq);
-  // controles avanzados
   const controls = document.createElement("div");
   let btn = document.createElement("button");
   btn.textContent = "↓";
@@ -328,6 +382,7 @@ function renderRasgueoEditor() {
   controls.appendChild(btn);
   rasgueoDiv.appendChild(controls);
 }
+
 // ========== 5. AUDIO ==========
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
@@ -400,7 +455,6 @@ function getCurrentSongData() {
 setInterval(async ()=>{
   const nowData = JSON.stringify(getCurrentSongData());
   if (nowData !== lastSavedData && songTitleInput.value.trim()) {
-    // Simula "modificado"
     let data = getCurrentSongData();
     if (currentSong && currentSong.id) {
       await setDoc(doc(db,"canciones",currentSong.id), data);

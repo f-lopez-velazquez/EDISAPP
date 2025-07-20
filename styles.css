@@ -60,47 +60,22 @@ section#song-editor-section {
   background: #fff;
 }
 .editor-group { margin: 18px 0; }
-#tablatura { margin-bottom: 1em; overflow-x: auto; background: #fff; border-radius:8px;}
+#tablatura { margin-bottom: 1em; overflow-x: auto; background: #fff; border-radius:8px; padding:12px;}
 .tablature-table {
   border-collapse: collapse; margin: 0 auto 0 0; width:auto;
   position:relative;
 }
-.tablature-table tr { height: 38px; }
-.tablature-table td {
-  width: 40px; min-width: 33px; height: 33px; text-align: center;
-  border-bottom: 1.7px solid #a7a7c7; background: #fff;
-  position: relative; cursor: pointer;
-  transition: background .08s;
-  font-size: 1.07em;
-  border-right: 1.3px solid #e0deee; /* vertical tenue */
-}
-.tablature-table td:last-child { border-right: none;}
-.tablature-fret {
-  display: inline-block; background: #3b306c; color: #fff;
-  border-radius: 50%; width: 22px; height: 22px;
-  line-height: 22px; text-align: center;
-  font-weight: bold; font-size: 1em;
-  border: 2px solid #e7e5f1;
-  box-shadow: 0 2px 4px #0001; position: absolute; left: 7px; top: 2px; z-index:2;
-}
-.tablature-fret.trino::after {
-  content: "~";
-  position: absolute;
-  right: -13px;
-  top: 1px;
-  color: #eb9b00;
-  font-weight: bold;
-  font-size:1.35em;
-}
-#add-col, #del-col, #save-song, #pdf-song, #cancel-edit, #new-song-btn {
+#tablatura svg { display:block; margin:0 auto;}
+button, .voz-btn {
   background: #3b306c; color: #fff;
   border: none; border-radius: 8px; padding: 7px 19px; font-size: 1em;
   margin: 0 7px 12px 0; cursor: pointer; transition: background .14s;
 }
-#add-col:hover, #del-col:hover, #save-song:hover, #new-song-btn:hover, #pdf-song:hover {
-  background: #5e47a1;
-}
+button:hover, .voz-btn:hover { background: #5e47a1; }
 #cancel-edit:hover { background: #aaa; color: #111; }
+#pdf-song:hover { background: #e7c574; color: #3b306c;}
+.voz-btn { padding:5px 14px; margin:0 7px 0 0; border-radius:7px; border:none; background:#dad8f2; color:#29244b; font-size:1em; font-weight:bold; cursor:pointer;}
+.voz-btn.active { background: #ffe082; color: #222; }
 #letra {
   background: #fff; border: 1.4px solid #aaa;
   border-radius: 8px; padding: 1.2em;
@@ -137,5 +112,3 @@ select { border-radius: 6px; border: 1.1px solid #888; font-size: 1em; padding: 
   opacity:0; pointer-events:none; transition:opacity .22s;
 }
 #toast.visible { opacity: 0.93; pointer-events:auto; }
-.voz-btn { padding:5px 14px; margin:0 7px 0 0; border-radius:7px; border:none; background:#dad8f2; color:#29244b; font-size:1em; font-weight:bold; cursor:pointer;}
-.voz-btn.active { background: #ffe082; color: #222; }
