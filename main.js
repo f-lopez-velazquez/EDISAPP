@@ -1,14 +1,13 @@
-// Firebase
+// FIREBASE: usa tus datos
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+import { getFirestore, collection, doc, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
 
-// Configuración Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDtShAFym0sPrrkocsY48oAB2W4wbUD9ZY",
   authDomain: "edisapp-54c5c.firebaseapp.com",
   projectId: "edisapp-54c5c",
-  storageBucket: "edisapp-54c5c.firebasestorage.app",
+  storageBucket: "edisapp-54c5c.appspot.com", // ojo .app**spot**.com
   messagingSenderId: "1022245708836",
   appId: "1:1022245708836:web:5031161ed56f7d162524b1"
 };
@@ -16,318 +15,295 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// === MOCK DATA EJEMPLO ===
-const canciones = [
-  {
-    id: 'aires-vascos',
-    titulo: "Aires Vascos",
-    letra: "Viva la gente del pueblo...",
-    letraMapeada: [
-      // ejemplo: [{acorde: "C", pos: 0}, ...] (pos = índice de letra donde poner acorde arriba)
-    ],
-    instrumentos: {
-      guitarra: {
-        rasgueo: [ "↓", "↑", "X", "↓", "↑" ],
-        tablatura: [
-          // 6 cuerdas, n filas
-          [ "", 3, 2, 0, 1, 0 ],
-        ],
-      },
-      contrabajo: {
-        tablatura: [
-          [ "", 2, 4, "" ],
-        ]
-      },
-      mandolina: {
-        voz: {
-          "1ra": { tablatura: [[0,2,2,0]], arreglos: [] },
-          "2da": { tablatura: [[0,2,1,0]], arreglos: [] },
-          "3ra": { tablatura: [[2,1,0,0]], arreglos: [] }
-        }
-      },
-      // laud, bandurria igual estructura
-    },
-    audioUrl: ""
-  }
-];
-// =========================
+const INSTRUMENTS = {
+  guitarra: 6,
+  laud: 6,
+  bandurria: 6,
+  mandolina: 4,
+  tricordio: 4,
+  contrabajo: 4
+};
+
+const DEFAULT_BEATS = 16;
+
+let songList = [];
+let currentSong = null;
+let isNew = false;
 
 // DOM
 const songListElem = document.getElementById("song-list");
-const songTitle = document.getElementById("song-title");
-const instrumentTabs = document.getElementById("instrument-tabs");
-const instrumentContent = document.getElementById("instrument-content");
-const audioBtn = document.getElementById("audio-btn");
+const songForm = document.getElementById("song-form");
+const songTitleInput = document.getElementById("song-title");
+const letraInput = document.getElementById("letra-in");
+const instrumentoSel = document.getElementById("instrumento");
+const instrSpan = document.getElementById("instr-span");
+const tablaturaDiv = document.getElementById("tablatura");
+const addColBtn = document.getElementById("add-col");
+const delColBtn = document.getElementById("del-col");
+const letraDiv = document.getElementById("letra");
+const rasgueoDiv = document.getElementById("rasgueo");
 const audioUpload = document.getElementById("audio-upload");
 const audioPlayer = document.getElementById("audio-player");
-const lyricsEditor = document.getElementById("lyrics-editor");
-const saveBtn = document.getElementById("save-btn");
-const modal = document.getElementById("modal");
+const saveBtn = document.getElementById("save-song");
+const cancelBtn = document.getElementById("cancel-edit");
+const newSongBtn = document.getElementById("new-song-btn");
+const toast = document.getElementById("toast");
 
-// Estado actual
-let currentSong = canciones[0];
-let currentInstrument = "guitarra";
-let currentVoz = "1ra";
-let tablatureEditData = [];
-let rasgueoEditData = [];
-let letraChunks = [];
-let acordesArriba = [];
+let tabData = createEmptyTab("guitarra", DEFAULT_BEATS);
+let letraOriginal = "";
+let acordesArriba = {};
+let rasgueoArr = [];
 
-// --- Render Listado ---
+// ------------ CRUD Firebase ---------------
+
+async function loadSongList() {
+  songList = [];
+  songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
+  const snap = await getDocs(collection(db, "canciones"));
+  snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
+  renderSongList();
+}
+
 function renderSongList() {
   songListElem.innerHTML = "";
-  canciones.forEach((song, idx) => {
+  songList.sort((a,b)=>a.titulo.localeCompare(b.titulo));
+  for (const song of songList) {
     const li = document.createElement("li");
     li.textContent = song.titulo;
-    li.classList.toggle("selected", currentSong === song);
-    li.onclick = () => {
-      selectSong(idx);
-    };
+    li.onclick = () => selectSong(song.id);
+    if (currentSong && song.id === currentSong.id) li.classList.add("selected");
     songListElem.appendChild(li);
-  });
-}
-function selectSong(idx) {
-  currentSong = canciones[idx];
-  songTitle.textContent = currentSong.titulo;
-  renderAudioSection();
-  renderInstrumentTabs();
-  renderLyricsEditor();
-}
-renderSongList();
-selectSong(0);
-
-// ---- AUDIO UPLOAD Y PLAYER ----
-function renderAudioSection() {
-  if (currentSong.audioUrl) {
-    audioPlayer.src = currentSong.audioUrl;
-    audioPlayer.style.display = "";
-  } else {
-    audioPlayer.style.display = "none";
-  }
-  audioBtn.onclick = () => audioUpload.click();
-  audioUpload.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    showModal("Subiendo audio...");
-    const audioRef = ref(storage, `audios/${currentSong.id}/${file.name}`);
-    await uploadBytes(audioRef, file);
-    const url = await getDownloadURL(audioRef);
-    currentSong.audioUrl = url;
-    audioPlayer.src = url;
-    audioPlayer.style.display = "";
-    hideModal();
-    // Aquí deberías guardar el nuevo url en firestore
-  };
-}
-
-// ---- INSTRUMENTOS & TABS ----
-function renderInstrumentTabs() {
-  instrumentTabs.innerHTML = "";
-  const instrumentos = Object.keys(currentSong.instrumentos || {});
-  instrumentos.forEach(name => {
-    const btn = document.createElement("button");
-    btn.textContent = name[0].toUpperCase() + name.slice(1);
-    btn.classList.toggle("active", name === currentInstrument);
-    btn.onclick = () => {
-      currentInstrument = name;
-      currentVoz = "1ra";
-      renderInstrumentEditor();
-      renderInstrumentTabs();
-    };
-    instrumentTabs.appendChild(btn);
-  });
-  renderInstrumentEditor();
-}
-
-// --- TABLATURE & RASGUEO EDITOR ---
-function renderInstrumentEditor() {
-  instrumentContent.innerHTML = "";
-  const instr = currentSong.instrumentos[currentInstrument];
-  // Si el instrumento tiene voces
-  if (instr.voz) {
-    const vozTabs = document.createElement("div");
-    vozTabs.className = "tablature-controls";
-    ["1ra", "2da", "3ra"].forEach(vz => {
-      const vbtn = document.createElement("button");
-      vbtn.textContent = vz;
-      vbtn.classList.toggle("active", vz === currentVoz);
-      vbtn.onclick = () => { currentVoz = vz; renderInstrumentEditor(); };
-      vozTabs.appendChild(vbtn);
-    });
-    instrumentContent.appendChild(vozTabs);
-    tablatureEditData = JSON.parse(JSON.stringify(instr.voz[currentVoz].tablatura || [[]]));
-    instrumentContent.appendChild(tabEditComponent(tablatureEditData, getNumStrings(currentInstrument)));
-  } else {
-    tablatureEditData = JSON.parse(JSON.stringify(instr.tablatura || [[]]));
-    if (currentInstrument === "guitarra") {
-      // Editor de rasgueo
-      rasgueoEditData = [...(instr.rasgueo || [])];
-      instrumentContent.appendChild(rasgueoEditComponent(rasgueoEditData));
-    }
-    instrumentContent.appendChild(tabEditComponent(tablatureEditData, getNumStrings(currentInstrument)));
   }
 }
-// Get strings per instrument
-function getNumStrings(instr) {
-  if (instr === "guitarra") return 6;
-  if (instr === "contrabajo") return 4;
-  if (instr === "mandolina" || instr === "tricordio" || instr === "laud" || instr === "bandurria") return 8;
-  return 6;
+
+// ------------ Editor y render ---------------
+
+function selectSong(id) {
+  currentSong = songList.find(s=>s.id===id);
+  isNew = false;
+  fillFormFromSong(currentSong);
 }
 
-// Componente de edición de tablatura
-function tabEditComponent(tab, numStrings=6) {
-  const wrap = document.createElement("div");
-  wrap.className = "tablature-edit";
-  // Controles
-  const controls = document.createElement("div");
-  controls.className = "tablature-controls";
-  const addRow = document.createElement("button");
-  addRow.textContent = "+ Compás";
-  addRow.className = "tablature-btn-add";
-  addRow.onclick = () => { tab.push(Array(numStrings).fill("")); rerender(); };
-  controls.appendChild(addRow);
-  if (tab.length) {
-    const delRow = document.createElement("button");
-    delRow.textContent = "- Compás";
-    delRow.className = "tablature-btn-del";
-    delRow.onclick = () => { tab.pop(); rerender(); };
-    controls.appendChild(delRow);
+function createEmptyTab(instr, beats) {
+  const strings = INSTRUMENTS[instr];
+  return Array(strings).fill().map(() => Array(beats).fill(""));
+}
+function fillFormFromSong(song) {
+  songTitleInput.value = song.titulo;
+  letraInput.value = song.letra;
+  instrumentoSel.value = song.instrumento;
+  instrSpan.textContent = getInstrLabel(song.instrumento);
+  tabData = song.tablatura || createEmptyTab(song.instrumento, DEFAULT_BEATS);
+  letraOriginal = song.letra || "";
+  acordesArriba = song.acordesArriba || {};
+  rasgueoArr = song.rasgueo || [];
+  audioPlayer.style.display = song.audioUrl ? "" : "none";
+  audioPlayer.src = song.audioUrl || "";
+  renderTablatureEditor();
+  renderLetraEditor();
+  renderRasgueoEditor();
+}
+
+function clearEditor() {
+  songTitleInput.value = "";
+  letraInput.value = "";
+  instrumentoSel.value = "guitarra";
+  instrSpan.textContent = getInstrLabel("guitarra");
+  tabData = createEmptyTab("guitarra", DEFAULT_BEATS);
+  letraOriginal = "";
+  acordesArriba = {};
+  rasgueoArr = [];
+  audioPlayer.src = "";
+  audioPlayer.style.display = "none";
+  renderTablatureEditor();
+  renderLetraEditor();
+  renderRasgueoEditor();
+}
+
+instrumentoSel.onchange = () => {
+  instrSpan.textContent = getInstrLabel(instrumentoSel.value);
+  tabData = createEmptyTab(instrumentoSel.value, tabData[0].length);
+  renderTablatureEditor();
+  renderRasgueoEditor();
+};
+addColBtn.onclick = () => {
+  for (let s = 0; s < tabData.length; s++) tabData[s].push("");
+  renderTablatureEditor();
+};
+delColBtn.onclick = () => {
+  if (tabData[0].length > 1) {
+    for (let s = 0; s < tabData.length; s++) tabData[s].pop();
+    renderTablatureEditor();
   }
-  wrap.appendChild(controls);
-  // Tabla de cuerdas/trastes
+};
+
+function renderTablatureEditor() {
+  tablaturaDiv.innerHTML = "";
+  const numStrings = INSTRUMENTS[instrumentoSel.value];
+  const numBeats = tabData[0].length;
   const table = document.createElement("table");
   table.className = "tablature-table";
-  for (let row = 0; row < tab.length; row++) {
+  for (let s = 0; s < numStrings; s++) {
     const tr = document.createElement("tr");
-    for (let s = 0; s < numStrings; s++) {
+    for (let b = 0; b < numBeats; b++) {
       const td = document.createElement("td");
-      // Input de traste
-      const val = tab[row][s];
-      if (val === "") {
-        td.innerHTML = `<span style="color:#bbb;">—</span>`;
-      } else {
-        td.innerHTML = `<span class="tablature-fret">${val}</span>`;
+      if (tabData[s][b] !== "") {
+        const circle = document.createElement("span");
+        circle.className = "tablature-fret";
+        circle.textContent = tabData[s][b];
+        td.appendChild(circle);
       }
-      // Click: edita
       td.onclick = () => {
-        showModal(`<input class="lyric-input" type="number" min="0" max="24" value="${val || ""}" id="inp-fret"/> 
-          <button onclick="window.setFretValue()">Ok</button> 
-          <button onclick="window.hideModal()">Cancelar</button>`);
-        window.setFretValue = () => {
-          tab[row][s] = document.getElementById("inp-fret").value;
-          hideModal();
-          rerender();
+        td.classList.add("selected");
+        td.innerHTML = `<input type="number" min="0" max="24" value="${tabData[s][b]||""}" style="width:27px; font-size:1em;" />`;
+        const input = td.querySelector("input");
+        input.focus();
+        input.onblur = () => {
+          tabData[s][b] = input.value || "";
+          renderTablatureEditor();
+        };
+        input.onkeydown = (e) => {
+          if (e.key === "Enter" || e.key === "Tab") input.blur();
         };
       };
-      // Botón de trino
-      if (val !== "") {
-        const trinoBtn = document.createElement("button");
-        trinoBtn.textContent = "Trino";
-        trinoBtn.className = "tablature-btn-add";
-        trinoBtn.onclick = (e) => {
-          e.stopPropagation();
-          td.firstChild.classList.toggle("trino");
-        };
-        td.appendChild(trinoBtn);
-      }
       tr.appendChild(td);
     }
     table.appendChild(tr);
   }
-  wrap.appendChild(table);
-  // Función para rerender
-  function rerender() {
-    instrumentContent.innerHTML = "";
-    instrumentContent.appendChild(tabEditComponent(tab, numStrings));
-  }
-  return wrap;
+  tablaturaDiv.appendChild(table);
 }
 
-// Componente de edición de rasgueo
-function rasgueoEditComponent(rasgueoArr) {
-  const wrap = document.createElement("div");
-  wrap.className = "rasgueo-edit";
+function renderLetraEditor() {
+  letraDiv.innerHTML = "";
+  for (let i = 0; i < letraOriginal.length; i++) {
+    const span = document.createElement("span");
+    span.className = "lyric-chunk";
+    span.textContent = letraOriginal[i];
+    // Acorde arriba
+    if (acordesArriba[i]) {
+      const chord = document.createElement("span");
+      chord.className = "chord-above";
+      chord.textContent = acordesArriba[i];
+      span.prepend(chord);
+    }
+    span.onclick = (e) => {
+      e.stopPropagation();
+      let val = prompt("Acorde (ejemplo: G, Dm, C7, etc):", acordesArriba[i] || "");
+      if (val === null) return;
+      val = val.trim();
+      if (val) {
+        acordesArriba[i] = val;
+      } else {
+        delete acordesArriba[i];
+      }
+      renderLetraEditor();
+    };
+    letraDiv.appendChild(span);
+  }
+}
+letraInput.oninput = ()=>{
+  letraOriginal = letraInput.value;
+  acordesArriba = {};
+  renderLetraEditor();
+};
+
+function renderRasgueoEditor() {
+  rasgueoDiv.innerHTML = "";
+  if (instrumentoSel.value !== "guitarra") {
+    rasgueoDiv.innerHTML = `<div style="color:#888;font-size:1em;">(Rasgueo sólo editable en guitarra)</div>`;
+    return;
+  }
   const seq = document.createElement("div");
-  seq.className = "rasgueo-sequence";
+  seq.style.display = "flex";
+  seq.style.gap = "10px";
   rasgueoArr.forEach((r, idx) => {
     const icon = document.createElement("span");
     icon.className = "rasgueo-icon";
     icon.innerHTML = (r === "↓") ? "&#8595;" : (r === "↑") ? "&#8593;" : (r === "X") ? "✖" : r;
-    icon.onclick = () => { rasgueoArr.splice(idx, 1); rerender(); };
+    icon.onclick = () => { rasgueoArr.splice(idx, 1); renderRasgueoEditor(); };
     seq.appendChild(icon);
   });
-  wrap.appendChild(seq);
-  // Controles
+  rasgueoDiv.appendChild(seq);
   const controls = document.createElement("div");
-  controls.className = "rasgueo-controls";
   ["↓", "↑", "X", "•"].forEach(val => {
     const btn = document.createElement("button");
     btn.textContent = val;
     btn.className = "rasgueo-btn-add";
-    btn.onclick = () => { rasgueoArr.push(val); rerender(); };
+    btn.onclick = () => { rasgueoArr.push(val); renderRasgueoEditor(); };
     controls.appendChild(btn);
   });
-  wrap.appendChild(controls);
-  function rerender() {
-    instrumentContent.innerHTML = "";
-    instrumentContent.appendChild(rasgueoEditComponent(rasgueoArr));
-    instrumentContent.appendChild(tabEditComponent(tablatureEditData, 6));
-  }
-  return wrap;
+  rasgueoDiv.appendChild(controls);
 }
 
-// --- EDITOR DE LETRA Y ACORDES ---
-function renderLyricsEditor() {
-  lyricsEditor.innerHTML = "";
-  letraChunks = currentSong.letra.split("").map(l => ({ letra: l, acorde: "" }));
-  acordesArriba = []; // {pos, acorde}
-  letraChunks.forEach((chunk, i) => {
-    const span = document.createElement("span");
-    span.className = "lyric-chunk";
-    span.textContent = chunk.letra;
-    span.onclick = (e) => {
-      showModal(`<input class="lyric-input" type="text" maxlength="6" placeholder="Acorde" id="acorde-edit"/> 
-        <button onclick="window.setChordAt(${i})">Ok</button> 
-        <button onclick="window.hideModal()">Cancelar</button>`);
-      window.setChordAt = (idx) => {
-        acordesArriba = acordesArriba.filter(a => a.pos !== idx);
-        const val = document.getElementById("acorde-edit").value;
-        if (val) acordesArriba.push({ pos: idx, acorde: val });
-        hideModal();
-        renderLyricsEditor();
-      };
-    };
-    // Render acorde si existe en esa pos
-    const match = acordesArriba.find(a => a.pos === i);
-    if (match) {
-      const chordSpan = document.createElement("span");
-      chordSpan.className = "chord-above";
-      chordSpan.textContent = match.acorde;
-      span.prepend(chordSpan);
-    }
-    lyricsEditor.appendChild(span);
-  });
-}
-
-// --- MODAL SIMPLE ---
-function showModal(html) {
-  modal.innerHTML = `<div id="modal-content">${html}</div>`;
-  modal.classList.remove("hidden");
-}
-function hideModal() {
-  modal.innerHTML = "";
-  modal.classList.add("hidden");
-}
-window.hideModal = hideModal;
-
-// --- GUARDAR EN FIREBASE (demo) ---
-saveBtn.onclick = async () => {
-  showModal("Guardando...");
-  // Debes construir la estructura real de datos aquí según los editores
-  // y subirla a Firestore
-  // Ejemplo:
-  // await setDoc(doc(db, "canciones", currentSong.id), { ... });
-  hideModal();
+// Audio
+audioUpload.onchange = function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  audioPlayer.src = url;
+  audioPlayer.style.display = "";
 };
 
+// Nueva canción
+newSongBtn.onclick = () => {
+  isNew = true;
+  currentSong = null;
+  clearEditor();
+  songTitleInput.focus();
+};
+
+// Cancelar edición
+cancelBtn.onclick = (e) => {
+  e.preventDefault();
+  if (songList.length && currentSong) fillFormFromSong(currentSong);
+  else clearEditor();
+};
+
+// Guardar canción
+songForm.onsubmit = async function(e) {
+  e.preventDefault();
+  let audioUrl = currentSong ? currentSong.audioUrl : "";
+  if (audioUpload.files[0]) {
+    showToast("Subiendo audio...");
+    const file = audioUpload.files[0];
+    const storageRef = ref(storage, "audios/"+songTitleInput.value+"-"+Date.now());
+    await uploadBytes(storageRef, file);
+    audioUrl = await getDownloadURL(storageRef);
+    audioPlayer.src = audioUrl;
+  }
+  const data = {
+    titulo: songTitleInput.value,
+    letra: letraInput.value,
+    instrumento: instrumentoSel.value,
+    tablatura: tabData,
+    acordesArriba,
+    rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
+    audioUrl
+  };
+  if (isNew) {
+    const newRef = await addDoc(collection(db,"canciones"), data);
+    showToast("Canción agregada");
+    currentSong = {id:newRef.id,...data};
+  } else if (currentSong) {
+    await setDoc(doc(db,"canciones",currentSong.id), data);
+    showToast("Canción actualizada");
+    currentSong = {...data, id:currentSong.id};
+  }
+  await loadSongList();
+  fillFormFromSong(currentSong);
+};
+
+function getInstrLabel(instr) {
+  return `${instr.charAt(0).toUpperCase()+instr.slice(1)} (${INSTRUMENTS[instr]})`;
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("visible");
+  setTimeout(()=>toast.classList.remove("visible"), 1800);
+}
+
+// --- INICIO ---
+instrSpan.textContent = getInstrLabel("guitarra");
+loadSongList();
+clearEditor();
