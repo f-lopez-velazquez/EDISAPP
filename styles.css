@@ -18,7 +18,11 @@ header .logo {
   padding: 0;
   box-shadow: none;
 }
-h1 { margin: 0; color: #fff; }
+h1 { margin: 0; color: #fff; flex:1;}
+#auth-controls {
+  display: flex; align-items: center; gap: 8px;
+  color: #ffe082; font-weight: bold;
+}
 main { display: flex; min-height: 88vh; }
 #song-list-container {
   width: 340px; background: #141424;
@@ -67,6 +71,7 @@ button, .voz-btn {
   border: none; border-radius: 8px; padding: 7px 19px; font-size: 1em;
   margin: 0 7px 12px 0; cursor: pointer; transition: background .14s;
 }
+button[disabled], .voz-btn[disabled] { background: #bbb; color: #888; cursor:not-allowed;}
 button:hover, .voz-btn:hover { background: #5e47a1; }
 #cancel-edit:hover { background: #aaa; color: #111; }
 #pdf-song:hover { background: #e7c574; color: #3b306c;}
@@ -80,9 +85,11 @@ button:hover, .voz-btn:hover { background: #5e47a1; }
   word-break: break-all; margin-bottom: 2em;
 }
 .chord-above {
-  position: relative; top: -1.65em; color: #3b306c; background: #e7e5f1;
+  position: absolute;
+  left: 50%; top: -1.65em; transform: translateX(-50%);
+  color: #3b306c; background: #e7e5f1;
   border-radius: 4px; padding: 1px 7px; font-weight: bold; font-size: .95em;
-  pointer-events: none;
+  pointer-events: none; z-index:2;
 }
 .lyric-chunk {
   position: relative; display: inline-block; min-width: 11px; cursor: pointer;
@@ -99,7 +106,7 @@ select { border-radius: 6px; border: 1.1px solid #888; font-size: 1em; padding: 
   font-size: 2em; cursor:pointer; transition:transform .12s; user-select:none;
 }
 .rasgueo-bajo {
-  font-size:1.55em;
+  font-size:1.2em;
   font-weight: bold;
   border-radius: 50%;
   border: 2px solid #5534c4;
@@ -110,9 +117,31 @@ select { border-radius: 6px; border: 1.1px solid #888; font-size: 1em; padding: 
   box-shadow:0 1px 2px #0002;
   vertical-align: middle;
 }
+#arreglos-list {
+  margin: 8px 0 13px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.arreglo-btn {
+  padding: 4px 13px; border-radius: 6px; font-size:1em; font-weight:600;
+  background:#dad8f2; color:#3b306c; border:none; cursor:pointer;
+}
+.arreglo-btn.active { background:#ffe082; color:#222;}
+#tab-col-controls {margin-bottom:1em;}
 #toast {
   position:fixed; top:22px; right:22px; background:#333; color:#fff;
   padding:1.1em 2em; border-radius:12px; z-index:100; font-size:1.13em;
   opacity:0; pointer-events:none; transition:opacity .22s;
 }
 #toast.visible { opacity: 0.93; pointer-events:auto; }
+
+.modal-bg {
+  position:fixed; top:0; left:0; right:0; bottom:0; background:#0008;
+  z-index:5000; display:flex; align-items:center; justify-content:center;
+}
+.modal-box {
+  background:#fff; padding:2em 2.2em; border-radius:15px; box-shadow:0 7px 42px #0005; min-width:300px;
+}
+.modal-box label {display:block; margin:12px 0 6px;}
+#login-modal input {width:100%; font-size:1.1em; border-radius:7px;}

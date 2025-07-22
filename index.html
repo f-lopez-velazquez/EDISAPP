@@ -11,6 +11,11 @@
     <div class="header-bg">
       <img src="https://i.imgur.com/sRgWLhM.png" alt="Logo Estudiantina" class="logo"/>
       <h1>Cancionero Estudiantina FIMEE</h1>
+      <div id="auth-controls">
+        <span id="auth-user"></span>
+        <button id="login-btn" type="button">Iniciar sesión</button>
+        <button id="logout-btn" type="button" style="display:none;">Cerrar sesión</button>
+      </div>
     </div>
   </header>
   <main>
@@ -34,8 +39,7 @@
             <option value="guitarra">Guitarra (6)</option>
             <option value="laud">Laúd (6)</option>
             <option value="bandurria">Bandurria (6)</option>
-            <option value="mandolina">Mandolina (4)</option>
-            <option value="tricordio">Tricordio (4)</option>
+            <option value="mandolina_tricordio">Mandolina/Tricordio (4)</option>
             <option value="contrabajo">Contrabajo (4)</option>
             <option value="guitarron">Guitarrón (6)</option>
           </select>
@@ -50,10 +54,14 @@
             Editor de Tablatura 
             <span id="tabs-voz"></span>
           </h3>
-          <div id="tabs-voz-btns"></div>
+          <div id="arreglos-list"></div>
           <div id="tablatura"></div>
-          <button id="add-col" type="button">+ Tiempo</button>
-          <button id="del-col" type="button">- Tiempo</button>
+          <div id="tab-col-controls">
+            <button id="add-col" type="button">+ Tiempo</button>
+            <button id="del-col" type="button">- Tiempo</button>
+            <button id="add-arreglo" type="button">+ Arreglo</button>
+            <button id="del-arreglo" type="button">- Arreglo</button>
+          </div>
         </div>
         <div class="editor-group">
           <h3>Editor de Rasgueo (sólo guitarra)</h3>
@@ -73,6 +81,15 @@
     </section>
   </main>
   <div id="toast"></div>
+  <div id="modal-bg" class="modal-bg" style="display:none;">
+    <div class="modal-box" id="login-modal">
+      <h2>Iniciar sesión</h2>
+      <label>Email:<br><input id="login-email" type="email" /></label>
+      <label>Contraseña:<br><input id="login-pass" type="password" /></label>
+      <button id="do-login-btn" type="button">Entrar</button>
+      <div id="login-error" style="color:#b00;margin-top:8px;"></div>
+    </div>
+  </div>
   <!-- html2pdf debe ir antes de main.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script type="module" src="main.js"></script>

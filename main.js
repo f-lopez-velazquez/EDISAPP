@@ -1,9 +1,10 @@
-// === FIREBASE CONFIGURACIÓN Y LIBRERÍAS ===
+// --- FIREBASE CONFIG Y LIBS ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js";
 
-// Configuración del proyecto Firebase
+// --- CONFIGURACIÓN FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyDtShAFym0sPrrkocsY48oAB2W4wbUD9ZY",
   authDomain: "edisapp-54c5c.firebaseapp.com",
@@ -15,50 +16,49 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const auth = getAuth(app);
 
-// === INSTRUMENTOS Y VOCES ===
+// --- CONSTS Y ESTADO GLOBAL ---
+const ADMIN_EMAIL = "edis.ugto@gmail.com";
+let isAdmin = false;
+let currentUser = null;
+
 const INSTRUMENTS = {
-  guitarra: 6,
-  laud: 6,
-  bandurria: 6,
-  mandolina: 4,
-  tricordio: 4,
-  contrabajo: 4,
-  guitarron: 6
+  guitarra: { name: "Guitarra", strings: 6 },
+  laud: { name: "Laúd", strings: 6 },
+  bandurria: { name: "Bandurria", strings: 6 },
+  mandolina_tricordio: { name: "Mandolina/Tricordio", strings: 4 },
+  contrabajo: { name: "Contrabajo", strings: 4 },
+  guitarron: { name: "Guitarrón", strings: 6 }
 };
-const VOICES = {
-  guitarra: ["Principal"],
-  laud: ["1ra", "2da", "3ra", "arreglos"],
-  bandurria: ["1ra", "2da", "3ra", "arreglos"],
-  mandolina: ["1ra", "2da", "3ra", "arreglos"],
-  tricordio: ["1ra", "2da", "3ra", "arreglos"],
-  contrabajo: ["Principal"],
-  guitarron: ["Principal"]
-};
-const DEFAULT_BEATS = 16;
 
-// === VARIABLES DE ESTADO ===
+const DEFAULT_BEATS = 16;
+const DEFAULT_ARREGLOS = ["arreglo 1"];
+
 let songList = [];
 let currentSong = null;
 let isNew = false;
+let arreglos = [];
+let currentArreglo = "arreglo 1";
 let tabData = {};
 let letraOriginal = "";
 let acordesArriba = {};
 let rasgueoArr = [];
-let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
-// === REFERENCIAS DOM ===
+// --- DOM ELEMENTS ---
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
 const letraInput = document.getElementById("letra-in");
 const instrumentoSel = document.getElementById("instrumento");
-const instrSpan = document.getElementById("tabs-voz");
 const tablaturaDiv = document.getElementById("tablatura");
 const addColBtn = document.getElementById("add-col");
 const delColBtn = document.getElementById("del-col");
+const addArrBtn = document.getElementById("add-arreglo");
+const delArrBtn = document.getElementById("del-arreglo");
+const arreglosList = document.getElementById("arreglos-list");
 const letraDiv = document.getElementById("letra");
 const rasgueoDiv = document.getElementById("rasgueo");
 const audioUpload = document.getElementById("audio-upload");
@@ -67,11 +67,79 @@ const saveBtn = document.getElementById("save-song");
 const cancelBtn = document.getElementById("cancel-edit");
 const newSongBtn = document.getElementById("new-song-btn");
 const toast = document.getElementById("toast");
-const tabsVozBtns = document.getElementById("tabs-voz-btns");
 const pdfBtn = document.getElementById("pdf-song");
 const lastSavedDiv = document.getElementById("last-saved");
+const loginBtn = document.getElementById("login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authUserSpan = document.getElementById("auth-user");
+const modalBg = document.getElementById("modal-bg");
+const loginModal = document.getElementById("login-modal");
+const loginEmail = document.getElementById("login-email");
+const loginPass = document.getElementById("login-pass");
+const doLoginBtn = document.getElementById("do-login-btn");
+const loginError = document.getElementById("login-error");
 
-// === FUNCIONES DE SERIALIZACIÓN DE TABLATURA (Firestore solo objetos, no arrays anidados) ===
+// --- AUTENTICACIÓN ---
+function updateAuthUI() {
+  if (isAdmin) {
+    authUserSpan.textContent = "Editor: " + currentUser.email;
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "";
+    enableEditor(true);
+  } else if (currentUser) {
+    authUserSpan.textContent = "Solo lectura";
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "";
+    enableEditor(false);
+  } else {
+    authUserSpan.textContent = "";
+    loginBtn.style.display = "";
+    logoutBtn.style.display = "none";
+    enableEditor(false);
+  }
+}
+function enableEditor(edit) {
+  [
+    songTitleInput, letraInput, instrumentoSel, audioUpload,
+    addColBtn, delColBtn, addArrBtn, delArrBtn, saveBtn, cancelBtn
+  ].forEach(el=> el.disabled = !edit);
+  if (edit) {
+    document.querySelectorAll(".arreglo-btn").forEach(b=>b.disabled=false);
+    letraDiv.classList.remove("readonly");
+  } else {
+    document.querySelectorAll(".arreglo-btn").forEach(b=>b.disabled=true);
+    letraDiv.classList.add("readonly");
+  }
+}
+loginBtn.onclick = ()=>{
+  loginError.textContent = "";
+  loginEmail.value = "";
+  loginPass.value = "";
+  modalBg.style.display = "";
+  loginEmail.focus();
+};
+logoutBtn.onclick = async ()=>{
+  await signOut(auth);
+};
+modalBg.onclick = (e)=>{
+  if (e.target===modalBg) modalBg.style.display = "none";
+};
+doLoginBtn.onclick = async ()=>{
+  loginError.textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth, loginEmail.value, loginPass.value);
+    modalBg.style.display = "none";
+  } catch (e) {
+    loginError.textContent = "Error de inicio de sesión";
+  }
+};
+onAuthStateChanged(auth, user=>{
+  currentUser = user;
+  isAdmin = (user && user.email===ADMIN_EMAIL);
+  updateAuthUI();
+});
+
+// --- SERIALIZACIÓN TABLATURA (Firestore: solo objetos, no arrays anidados) ---
 function serializeTab(tabMatriz) {
   const obj = {};
   for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
@@ -83,7 +151,7 @@ function deserializeTab(tabObj) {
   return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
 }
 
-// === RENDER LISTA DE CANCIONES (EN VIVO) ===
+// --- FIRESTORE EN VIVO (lista de canciones) ---
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
@@ -106,105 +174,138 @@ function selectSong(id) {
   fillFormFromSong(currentSong);
 }
 
-// === INICIALIZAR EDITOR EN BLANCO O LIMPIAR ===
+// --- EDITOR: INICIALIZAR O LIMPIAR ---
 function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
   instrumentoSel.value = "guitarra";
-  instrSpan.textContent = "";
+  arreglos = [...DEFAULT_ARREGLOS];
+  currentArreglo = arreglos[0];
   tabData = {};
-  currentVoice = VOICES["guitarra"][0];
   Object.keys(INSTRUMENTS).forEach(instr=>{
-    for(const voz of VOICES[instr]) {
-      if(!tabData[voz]) tabData[voz] = createEmptyTab(instr, DEFAULT_BEATS);
-    }
+    arreglos.forEach(ar=>{
+      let key = `${instr}_${ar}`;
+      tabData[key] = createEmptyTab(instr, DEFAULT_BEATS);
+    });
   });
   letraOriginal = "";
   acordesArriba = {};
   rasgueoArr = [];
   audioPlayer.src = "";
   audioPlayer.style.display = "none";
-  renderTabsVozBtns("guitarra");
+  renderArreglosBtns();
   renderTablatureEditorSVG();
   renderLetraEditor();
   renderRasgueoEditor();
 }
-
-// === LLENAR FORMULARIO AL SELECCIONAR CANCIÓN ===
 function fillFormFromSong(song) {
   if(!song) return;
   songTitleInput.value = song.titulo || "";
   letraInput.value = song.letra || "";
   instrumentoSel.value = song.instrumento || "guitarra";
   currentInstrument = song.instrumento || "guitarra";
-  instrSpan.textContent = "";
+  arreglos = song.arreglos && song.arreglos.length>0 ? [...song.arreglos] : [...DEFAULT_ARREGLOS];
+  currentArreglo = arreglos[0];
   tabData = {};
   if(song.tablatura) {
-    for(const voz of (VOICES[currentInstrument]||["Principal"])) {
-      tabData[voz] = song.tablatura[voz] ? deserializeTab(song.tablatura[voz]) : createEmptyTab(currentInstrument, DEFAULT_BEATS);
+    for(const ar of arreglos) {
+      let key = `${currentInstrument}_${ar}`;
+      tabData[key] = song.tablatura[ar] ? deserializeTab(song.tablatura[ar]) : createEmptyTab(currentInstrument, DEFAULT_BEATS);
+    }
+  } else {
+    for(const ar of arreglos) {
+      let key = `${currentInstrument}_${ar}`;
+      tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
     }
   }
-  currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
   letraOriginal = song.letra || "";
   acordesArriba = song.acordesArriba || {};
   rasgueoArr = song.rasgueo || [];
   audioPlayer.style.display = song.audioUrl ? "" : "none";
   audioPlayer.src = song.audioUrl || "";
-  renderTabsVozBtns(currentInstrument);
+  renderArreglosBtns();
   renderTablatureEditorSVG();
   renderLetraEditor();
   renderRasgueoEditor();
 }
-
-// === GENERAR TABLATURA EN BLANCO SEGÚN INSTRUMENTO ===
 function createEmptyTab(instr, beats) {
-  const strings = INSTRUMENTS[instr];
+  const strings = INSTRUMENTS[instr].strings;
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
 
-// === CAMBIAR INSTRUMENTO PRINCIPAL ===
+// --- CAMBIAR INSTRUMENTO PRINCIPAL ---
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
-  currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
-  if(!tabData) tabData = {};
-  for(const voz of (VOICES[currentInstrument]||["Principal"])) {
-    if(!tabData[voz]) tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+  arreglos = [...DEFAULT_ARREGLOS];
+  currentArreglo = arreglos[0];
+  for(const ar of arreglos) {
+    let key = `${currentInstrument}_${ar}`;
+    if(!tabData[key]) tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
   }
-  renderTabsVozBtns(currentInstrument);
+  renderArreglosBtns();
   renderTablatureEditorSVG();
   renderRasgueoEditor();
 };
 
-// === BOTONES DE VOCES ===
-function renderTabsVozBtns(instr) {
-  const voces = VOICES[instr] || ["Principal"];
-  tabsVozBtns.innerHTML = "";
-  voces.forEach(vz => {
+// --- BOTONES DE ARREGLOS ---
+function renderArreglosBtns() {
+  arreglosList.innerHTML = "";
+  arreglos.forEach(ar=>{
     const btn = document.createElement("button");
-    btn.textContent = vz;
-    btn.className = "voz-btn";
-    if (vz === currentVoice) btn.classList.add("active");
-    btn.onclick = (e)=>{ e.preventDefault(); currentVoice = vz; renderTablatureEditorSVG(); };
-    tabsVozBtns.appendChild(btn);
+    btn.textContent = ar;
+    btn.className = "arreglo-btn" + (ar===currentArreglo ? " active" : "");
+    btn.disabled = !isAdmin;
+    btn.onclick = (e)=>{
+      e.preventDefault();
+      currentArreglo = ar;
+      renderArreglosBtns();
+      renderTablatureEditorSVG();
+    };
+    arreglosList.appendChild(btn);
   });
 }
+addArrBtn.onclick = ()=>{
+  if (!isAdmin) return;
+  let next = arreglos.length+1;
+  let nuevo = `arreglo ${next}`;
+  arreglos.push(nuevo);
+  let key = `${currentInstrument}_${nuevo}`;
+  tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+  currentArreglo = nuevo;
+  renderArreglosBtns();
+  renderTablatureEditorSVG();
+};
+delArrBtn.onclick = ()=>{
+  if (!isAdmin) return;
+  if(arreglos.length<=1) return;
+  let idx = arreglos.indexOf(currentArreglo);
+  arreglos.splice(idx,1);
+  let key = `${currentInstrument}_${currentArreglo}`;
+  delete tabData[key];
+  currentArreglo = arreglos[0];
+  renderArreglosBtns();
+  renderTablatureEditorSVG();
+};
+
 addColBtn.onclick = () => {
-  let t = tabData[currentVoice];
+  if (!isAdmin) return;
+  let t = tabData[`${currentInstrument}_${currentArreglo}`];
   for (let s = 0; s < t.length; s++) t[s].push("");
   renderTablatureEditorSVG();
 };
 delColBtn.onclick = () => {
-  let t = tabData[currentVoice];
+  if (!isAdmin) return;
+  let t = tabData[`${currentInstrument}_${currentArreglo}`];
   if (t[0].length > 1) {
     for (let s = 0; s < t.length; s++) t[s].pop();
     renderTablatureEditorSVG();
   }
 };
 
-// === RENDERIZADOR TABLATURA SVG (INTERACTIVO) ===
+// --- TABLATURA SVG EDITABLE ---
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
-  const t = tabData[currentVoice];
+  let t = tabData[`${currentInstrument}_${currentArreglo}`];
   if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
   const numStrings = t.length;
   const numBeats = t[0].length;
@@ -252,7 +353,7 @@ function renderTablatureEditorSVG() {
       if(val) {
         let x = 24 + b*48;
         let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        g.style.cursor = "pointer";
+        g.style.cursor = isAdmin?"pointer":"default";
         let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", x);
         circle.setAttribute("cy", y);
@@ -281,20 +382,22 @@ function renderTablatureEditorSVG() {
           trinoTxt.textContent = "tr~";
           g.appendChild(trinoTxt);
         }
-        g.onclick = (e) => {
-          e.stopPropagation();
-          let actualObj = t[s][b];
-          let prevVal = (typeof actualObj === "object" && actualObj) ? actualObj.val : actualObj;
-          let prevTrino = (typeof actualObj === "object" && actualObj) ? actualObj.trino : false;
-          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", prevVal);
-          if(nuevo!==null && nuevo!=="") {
-            let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-            t[s][b] = {val: nuevo, trino:setTrino};
-          } else {
-            t[s][b] = "";
-          }
-          renderTablatureEditorSVG();
-        };
+        if(isAdmin) {
+          g.onclick = (e) => {
+            e.stopPropagation();
+            let actualObj = t[s][b];
+            let prevVal = (typeof actualObj === "object" && actualObj) ? actualObj.val : actualObj;
+            let prevTrino = (typeof actualObj === "object" && actualObj) ? actualObj.trino : false;
+            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", prevVal);
+            if(nuevo!==null && nuevo!=="") {
+              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
+              t[s][b] = {val: nuevo, trino:setTrino};
+            } else {
+              t[s][b] = "";
+            }
+            renderTablatureEditorSVG();
+          };
+        }
         svg.appendChild(g);
       } else {
         let x = 24 + b*48;
@@ -304,16 +407,18 @@ function renderTablatureEditorSVG() {
         clickArea.setAttribute("width", 26);
         clickArea.setAttribute("height", 26);
         clickArea.setAttribute("fill", "rgba(255,255,255,0)");
-        clickArea.style.cursor = "pointer";
-        clickArea.onclick = (e) => {
-          e.stopPropagation();
-          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
-          if(nuevo!==null && nuevo!=="") {
-            let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-            t[s][b] = {val: nuevo, trino:setTrino};
-          }
-          renderTablatureEditorSVG();
-        };
+        clickArea.style.cursor = isAdmin?"pointer":"default";
+        if(isAdmin) {
+          clickArea.onclick = (e) => {
+            e.stopPropagation();
+            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
+            if(nuevo!==null && nuevo!=="") {
+              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
+              t[s][b] = {val: nuevo, trino:setTrino};
+            }
+            renderTablatureEditorSVG();
+          };
+        }
         svg.appendChild(clickArea);
       }
     }
@@ -321,7 +426,7 @@ function renderTablatureEditorSVG() {
   tablaturaDiv.appendChild(svg);
 }
 
-// === LETRA EDITABLE + ACORDES ===
+// --- LETRA EDITABLE + ACORDES (acorde arriba perfectamente centrado) ---
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -332,20 +437,22 @@ function renderLetraEditor() {
       const chord = document.createElement("span");
       chord.className = "chord-above";
       chord.textContent = acordesArriba[i];
-      span.prepend(chord);
+      span.appendChild(chord);
     }
-    span.onclick = (e) => {
-      e.stopPropagation();
-      let val = prompt("Acorde (ejemplo: G, Dm, C7, etc):", acordesArriba[i] || "");
-      if (val === null) return;
-      val = val.trim();
-      if (val) {
-        acordesArriba[i] = val;
-      } else {
-        delete acordesArriba[i];
-      }
-      renderLetraEditor();
-    };
+    if (isAdmin) {
+      span.onclick = (e) => {
+        e.stopPropagation();
+        let val = prompt("Acorde (ejemplo: G, Dm, C7, etc):", acordesArriba[i] || "");
+        if (val === null) return;
+        val = val.trim();
+        if (val) {
+          acordesArriba[i] = val;
+        } else {
+          delete acordesArriba[i];
+        }
+        renderLetraEditor();
+      };
+    }
     letraDiv.appendChild(span);
   }
 }
@@ -355,7 +462,7 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
-// === SISTEMA DE RASGUEO PARA GUITARRA ===
+// --- RASGUEO (solo guitarra, bajo = "B") ---
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -369,10 +476,9 @@ function renderRasgueoEditor() {
     let icon = document.createElement("span");
     icon.className = "rasgueo-icon";
     if (r.type==="bajo") {
-      let bajoNum = r.str;
       icon = document.createElement("span");
       icon.className = "rasgueo-bajo rasgueo-icon";
-      icon.textContent = String.fromCharCode(9311+parseInt(bajoNum)); // Unicode ④, ⑤, ⑥
+      icon.textContent = "B";
     }
     else if (r.type==="flecha-chica-abajo") icon.innerHTML = `<span style="font-size:1.1em;opacity:.5;">&#8595;</span>`;
     else if (r.type==="flecha-chica-arriba") icon.innerHTML = `<span style="font-size:1.1em;opacity:.5;">&#8593;</span>`;
@@ -380,41 +486,40 @@ function renderRasgueoEditor() {
     else if (r.type==="flecha-abajo") icon.innerHTML = `<span style="font-size:1.5em;">&#8595;</span>`;
     else if (r.type==="muteo") icon.innerHTML = `<b style="font-size:1.12em;color:#888;">X</b>`;
     else icon.innerHTML = r.symb||"•";
-    icon.onclick = () => { rasgueoArr.splice(idx, 1); renderRasgueoEditor(); };
+    if (isAdmin) icon.onclick = () => { rasgueoArr.splice(idx, 1); renderRasgueoEditor(); };
     seq.appendChild(icon);
   });
   rasgueoDiv.appendChild(seq);
+  if (!isAdmin) return;
   const controls = document.createElement("div");
   let btn = document.createElement("button");
   btn.innerHTML = "↓";
-  btn.onclick = ()=>{ rasgueoArr.push({type:"flecha-abajo"}); renderRasgueoEditor(); };
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-abajo"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   btn = document.createElement("button");
   btn.innerHTML = "↑";
-  btn.onclick = ()=>{ rasgueoArr.push({type:"flecha-arriba"}); renderRasgueoEditor(); };
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-arriba"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   btn = document.createElement("button");
   btn.innerHTML = `<span style="font-size:1.1em;opacity:.6;">↓</span>`;
-  btn.onclick = ()=>{ rasgueoArr.push({type:"flecha-chica-abajo"}); renderRasgueoEditor(); };
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-chica-abajo"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   btn = document.createElement("button");
   btn.innerHTML = `<span style="font-size:1.1em;opacity:.6;">↑</span>`;
-  btn.onclick = ()=>{ rasgueoArr.push({type:"flecha-chica-arriba"}); renderRasgueoEditor(); };
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-chica-arriba"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
-  [4,5,6].forEach(str=>{
-    let bbtn = document.createElement("button");
-    bbtn.innerHTML = String.fromCharCode(9311+str);
-    bbtn.onclick = ()=>{ rasgueoArr.push({type:"bajo",str}); renderRasgueoEditor(); };
-    controls.appendChild(bbtn);
-  });
+  let bbtn = document.createElement("button");
+  bbtn.innerHTML = "B";
+  bbtn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"bajo"}); renderRasgueoEditor(); };
+  controls.appendChild(bbtn);
   btn = document.createElement("button");
   btn.textContent = "X";
-  btn.onclick = ()=>{ rasgueoArr.push({type:"muteo"}); renderRasgueoEditor(); };
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"muteo"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   rasgueoDiv.appendChild(controls);
 }
 
-// === SUBIDA DE AUDIO Y VISTA PREVIA ===
+// --- AUDIO ---
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -423,24 +528,26 @@ audioUpload.onchange = function (e) {
   audioPlayer.style.display = "";
 };
 
-// === NUEVA CANCIÓN ===
+// --- NUEVA CANCIÓN ---
 newSongBtn.onclick = () => {
+  if (!isAdmin) return;
   isNew = true;
   currentSong = null;
   clearEditor();
   songTitleInput.focus();
 };
 
-// === CANCELAR EDICIÓN ===
+// --- CANCELAR EDICIÓN ---
 cancelBtn.onclick = (e) => {
   e.preventDefault();
   if (songList.length && currentSong) fillFormFromSong(currentSong);
   else clearEditor();
 };
 
-// === GUARDADO EN FIRESTORE ===
+// --- GUARDADO EN FIRESTORE ---
 songForm.onsubmit = async function(e) {
   e.preventDefault();
+  if (!isAdmin) return;
   let audioUrl = currentSong ? currentSong.audioUrl : "";
   if (audioUpload.files[0]) {
     showToast("Subiendo audio...");
@@ -450,14 +557,16 @@ songForm.onsubmit = async function(e) {
     audioUrl = await getDownloadURL(storageRef);
     audioPlayer.src = audioUrl;
   }
+  // Serializa la tablatura según los arreglos
   const tablaturaObj = {};
-  for(const voz in tabData) {
-    tablaturaObj[voz] = serializeTab(tabData[voz]);
+  for(const ar of arreglos) {
+    tablaturaObj[ar] = serializeTab(tabData[`${currentInstrument}_${ar}`]);
   }
   const data = {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
+    arreglos: [...arreglos],
     tablatura: tablaturaObj,
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
@@ -476,16 +585,17 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 
-// === AUTOGUARDADO ===
+// --- AUTOGUARDADO ---
 function getCurrentSongData() {
   const tablaturaObj = {};
-  for(const voz in tabData) {
-    tablaturaObj[voz] = serializeTab(tabData[voz]);
+  for(const ar of arreglos) {
+    tablaturaObj[ar] = serializeTab(tabData[`${currentInstrument}_${ar}`]);
   }
   return {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
+    arreglos: [...arreglos],
     tablatura: tablaturaObj,
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
@@ -493,6 +603,7 @@ function getCurrentSongData() {
   };
 }
 setInterval(async ()=>{
+  if (!isAdmin) return;
   const nowData = JSON.stringify(getCurrentSongData());
   if (nowData !== lastSavedData && songTitleInput.value.trim()) {
     let data = getCurrentSongData();
@@ -505,17 +616,16 @@ setInterval(async ()=>{
   }
 }, 15000);
 
-// === EXPORTAR PDF ===
+// --- EXPORTAR PDF ---
 pdfBtn.onclick = ()=>{
   let seccion = document.getElementById("song-editor-section");
   html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
 };
 
-// === FEEDBACK TOAST ===
+// --- FEEDBACK TOAST ---
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("visible");
   setTimeout(()=>toast.classList.remove("visible"), 1700);
 }
-instrSpan.textContent = "";
 clearEditor();
