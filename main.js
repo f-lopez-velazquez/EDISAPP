@@ -1,8 +1,9 @@
+// === FIREBASE CONFIGURACIÓN Y LIBRERÍAS ===
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
 
-// Configuración de Firebase
+// Configuración del proyecto Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDtShAFym0sPrrkocsY48oAB2W4wbUD9ZY",
   authDomain: "edisapp-54c5c.firebaseapp.com",
@@ -15,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Instrumentos y voces disponibles
+// === INSTRUMENTOS Y VOCES ===
 const INSTRUMENTS = {
   guitarra: 6,
   laud: 6,
@@ -36,10 +37,10 @@ const VOICES = {
 };
 const DEFAULT_BEATS = 16;
 
+// === VARIABLES DE ESTADO ===
 let songList = [];
 let currentSong = null;
 let isNew = false;
-
 let tabData = {};
 let letraOriginal = "";
 let acordesArriba = {};
@@ -48,6 +49,7 @@ let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
+// === REFERENCIAS DOM ===
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -69,7 +71,7 @@ const tabsVozBtns = document.getElementById("tabs-voz-btns");
 const pdfBtn = document.getElementById("pdf-song");
 const lastSavedDiv = document.getElementById("last-saved");
 
-// SERIALIZACIÓN / DESERIALIZACIÓN de Tablaturas (Firestore no soporta arrays anidados)
+// === FUNCIONES DE SERIALIZACIÓN DE TABLATURA (Firestore solo objetos, no arrays anidados) ===
 function serializeTab(tabMatriz) {
   const obj = {};
   for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
@@ -81,13 +83,12 @@ function deserializeTab(tabObj) {
   return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
 }
 
-// Escucha en tiempo real Firestore
+// === RENDER LISTA DE CANCIONES (EN VIVO) ===
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
   renderSongList();
 });
-
 function renderSongList() {
   songListElem.innerHTML = "";
   songList.sort((a,b)=>a.titulo.localeCompare(b.titulo));
@@ -104,6 +105,8 @@ function selectSong(id) {
   isNew = false;
   fillFormFromSong(currentSong);
 }
+
+// === INICIALIZAR EDITOR EN BLANCO O LIMPIAR ===
 function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
@@ -126,6 +129,8 @@ function clearEditor() {
   renderLetraEditor();
   renderRasgueoEditor();
 }
+
+// === LLENAR FORMULARIO AL SELECCIONAR CANCIÓN ===
 function fillFormFromSong(song) {
   if(!song) return;
   songTitleInput.value = song.titulo || "";
@@ -150,10 +155,14 @@ function fillFormFromSong(song) {
   renderLetraEditor();
   renderRasgueoEditor();
 }
+
+// === GENERAR TABLATURA EN BLANCO SEGÚN INSTRUMENTO ===
 function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr];
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
+
+// === CAMBIAR INSTRUMENTO PRINCIPAL ===
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
   currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
@@ -165,6 +174,8 @@ instrumentoSel.onchange = () => {
   renderTablatureEditorSVG();
   renderRasgueoEditor();
 };
+
+// === BOTONES DE VOCES ===
 function renderTabsVozBtns(instr) {
   const voces = VOICES[instr] || ["Principal"];
   tabsVozBtns.innerHTML = "";
@@ -189,6 +200,8 @@ delColBtn.onclick = () => {
     renderTablatureEditorSVG();
   }
 };
+
+// === RENDERIZADOR TABLATURA SVG (INTERACTIVO) ===
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
   const t = tabData[currentVoice];
@@ -307,6 +320,8 @@ function renderTablatureEditorSVG() {
   }
   tablaturaDiv.appendChild(svg);
 }
+
+// === LETRA EDITABLE + ACORDES ===
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -340,6 +355,7 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
+// === SISTEMA DE RASGUEO PARA GUITARRA ===
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -398,6 +414,7 @@ function renderRasgueoEditor() {
   rasgueoDiv.appendChild(controls);
 }
 
+// === SUBIDA DE AUDIO Y VISTA PREVIA ===
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -405,17 +422,23 @@ audioUpload.onchange = function (e) {
   audioPlayer.src = url;
   audioPlayer.style.display = "";
 };
+
+// === NUEVA CANCIÓN ===
 newSongBtn.onclick = () => {
   isNew = true;
   currentSong = null;
   clearEditor();
   songTitleInput.focus();
 };
+
+// === CANCELAR EDICIÓN ===
 cancelBtn.onclick = (e) => {
   e.preventDefault();
   if (songList.length && currentSong) fillFormFromSong(currentSong);
   else clearEditor();
 };
+
+// === GUARDADO EN FIRESTORE ===
 songForm.onsubmit = async function(e) {
   e.preventDefault();
   let audioUrl = currentSong ? currentSong.audioUrl : "";
@@ -427,7 +450,6 @@ songForm.onsubmit = async function(e) {
     audioUrl = await getDownloadURL(storageRef);
     audioPlayer.src = audioUrl;
   }
-  // SERIALIZA la tablatura
   const tablaturaObj = {};
   for(const voz in tabData) {
     tablaturaObj[voz] = serializeTab(tabData[voz]);
@@ -445,6 +467,7 @@ songForm.onsubmit = async function(e) {
     const newRef = await addDoc(collection(db,"canciones"), data);
     showToast("Canción agregada");
     currentSong = {id:newRef.id,...data};
+    isNew = false;
   } else if (currentSong) {
     await setDoc(doc(db,"canciones",currentSong.id), data);
     showToast("Canción actualizada");
@@ -452,6 +475,8 @@ songForm.onsubmit = async function(e) {
   }
   lastSavedData = JSON.stringify(data);
 };
+
+// === AUTOGUARDADO ===
 function getCurrentSongData() {
   const tablaturaObj = {};
   for(const voz in tabData) {
@@ -480,10 +505,13 @@ setInterval(async ()=>{
   }
 }, 15000);
 
+// === EXPORTAR PDF ===
 pdfBtn.onclick = ()=>{
   let seccion = document.getElementById("song-editor-section");
   html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
 };
+
+// === FEEDBACK TOAST ===
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("visible");
