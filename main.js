@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -14,6 +14,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// INSTRUMENTOS y VOCES
 const INSTRUMENTS = {
   guitarra: 6,
   laud: 6,
@@ -67,13 +68,13 @@ const tabsVozBtns = document.getElementById("tabs-voz-btns");
 const pdfBtn = document.getElementById("pdf-song");
 const lastSavedDiv = document.getElementById("last-saved");
 
-async function loadSongList() {
+// Escucha en tiempo real
+onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
-  songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
-  const snap = await getDocs(collection(db, "canciones"));
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
   renderSongList();
-}
+});
+
 function renderSongList() {
   songListElem.innerHTML = "";
   songList.sort((a,b)=>a.titulo.localeCompare(b.titulo));
@@ -97,7 +98,7 @@ function clearEditor() {
   instrSpan.textContent = "";
   tabData = {};
   currentVoice = VOICES["guitarra"][0];
-  ["guitarra","laud","bandurria","mandolina","tricordio","contrabajo","guitarron"].forEach(instr=>{
+  Object.keys(INSTRUMENTS).forEach(instr=>{
     for(const voz of VOICES[instr]) {
       if(!tabData[voz]) tabData[voz] = createEmptyTab(instr, DEFAULT_BEATS);
     }
@@ -139,7 +140,6 @@ function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr];
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
   currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
@@ -256,10 +256,13 @@ function renderTablatureEditorSVG() {
         }
         g.onclick = (e) => {
           e.stopPropagation();
-          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", val);
+          let actualObj = t[s][b];
+          let prevVal = (typeof actualObj === "object" && actualObj) ? actualObj.val : actualObj;
+          let prevTrino = (typeof actualObj === "object" && actualObj) ? actualObj.trino : false;
+          let nuevo = prompt("Número de dedo/traste (vacío para quitar):", prevVal);
           if(nuevo!==null && nuevo!=="") {
             let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-            t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
+            t[s][b] = {val: nuevo, trino:setTrino};
           } else {
             t[s][b] = "";
           }
@@ -280,7 +283,7 @@ function renderTablatureEditorSVG() {
           let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
           if(nuevo!==null && nuevo!=="") {
             let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-            t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
+            t[s][b] = {val: nuevo, trino:setTrino};
           }
           renderTablatureEditorSVG();
         };
@@ -290,7 +293,6 @@ function renderTablatureEditorSVG() {
   }
   tablaturaDiv.appendChild(svg);
 }
-
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -429,8 +431,6 @@ songForm.onsubmit = async function(e) {
     showToast("Canción actualizada");
     currentSong = {...data, id:currentSong.id};
   }
-  await loadSongList();
-  fillFormFromSong(currentSong);
   lastSavedData = JSON.stringify(data);
 };
 function getCurrentSongData() {
@@ -467,5 +467,4 @@ function showToast(msg) {
   setTimeout(()=>toast.classList.remove("visible"), 1700);
 }
 instrSpan.textContent = "";
-loadSongList();
 clearEditor();
