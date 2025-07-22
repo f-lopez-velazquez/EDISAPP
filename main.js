@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/fireba
 import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
 
+// Configuración de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDtShAFym0sPrrkocsY48oAB2W4wbUD9ZY",
   authDomain: "edisapp-54c5c.firebaseapp.com",
@@ -14,6 +15,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// Instrumentos y voces disponibles
 const INSTRUMENTS = {
   guitarra: 6,
   laud: 6,
@@ -38,7 +40,7 @@ let songList = [];
 let currentSong = null;
 let isNew = false;
 
-let tabData = {}; // {voz: matriz}
+let tabData = {};
 let letraOriginal = "";
 let acordesArriba = {};
 let rasgueoArr = [];
@@ -67,7 +69,7 @@ const tabsVozBtns = document.getElementById("tabs-voz-btns");
 const pdfBtn = document.getElementById("pdf-song");
 const lastSavedDiv = document.getElementById("last-saved");
 
-// --- SERIALIZACIÓN / DESERIALIZACIÓN de Tablaturas ---
+// SERIALIZACIÓN / DESERIALIZACIÓN de Tablaturas (Firestore no soporta arrays anidados)
 function serializeTab(tabMatriz) {
   const obj = {};
   for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
@@ -79,7 +81,7 @@ function deserializeTab(tabObj) {
   return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
 }
 
-// --- Escucha en tiempo real ---
+// Escucha en tiempo real Firestore
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
@@ -451,7 +453,6 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 function getCurrentSongData() {
-  // SERIALIZA la tablatura
   const tablaturaObj = {};
   for(const voz in tabData) {
     tablaturaObj[voz] = serializeTab(tabData[voz]);
