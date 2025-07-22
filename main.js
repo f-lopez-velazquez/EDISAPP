@@ -14,7 +14,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// INSTRUMENTOS y VOCES
 const INSTRUMENTS = {
   guitarra: 6,
   laud: 6,
@@ -68,7 +67,19 @@ const tabsVozBtns = document.getElementById("tabs-voz-btns");
 const pdfBtn = document.getElementById("pdf-song");
 const lastSavedDiv = document.getElementById("last-saved");
 
-// Escucha en tiempo real
+// --- SERIALIZACIÓN / DESERIALIZACIÓN de Tablaturas ---
+function serializeTab(tabMatriz) {
+  const obj = {};
+  for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
+  return obj;
+}
+function deserializeTab(tabObj) {
+  if (Array.isArray(tabObj)) return tabObj;
+  if (!tabObj) return [];
+  return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
+}
+
+// --- Escucha en tiempo real ---
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
@@ -120,10 +131,11 @@ function fillFormFromSong(song) {
   instrumentoSel.value = song.instrumento || "guitarra";
   currentInstrument = song.instrumento || "guitarra";
   instrSpan.textContent = "";
-  tabData = song.tablatura || {};
-  if(!tabData) tabData = {};
-  for(const voz of (VOICES[currentInstrument]||["Principal"])) {
-    if(!tabData[voz]) tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+  tabData = {};
+  if(song.tablatura) {
+    for(const voz of (VOICES[currentInstrument]||["Principal"])) {
+      tabData[voz] = song.tablatura[voz] ? deserializeTab(song.tablatura[voz]) : createEmptyTab(currentInstrument, DEFAULT_BEATS);
+    }
   }
   currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
   letraOriginal = song.letra || "";
@@ -413,11 +425,16 @@ songForm.onsubmit = async function(e) {
     audioUrl = await getDownloadURL(storageRef);
     audioPlayer.src = audioUrl;
   }
+  // SERIALIZA la tablatura
+  const tablaturaObj = {};
+  for(const voz in tabData) {
+    tablaturaObj[voz] = serializeTab(tabData[voz]);
+  }
   const data = {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
-    tablatura: tabData,
+    tablatura: tablaturaObj,
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
     audioUrl
@@ -434,11 +451,16 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 function getCurrentSongData() {
+  // SERIALIZA la tablatura
+  const tablaturaObj = {};
+  for(const voz in tabData) {
+    tablaturaObj[voz] = serializeTab(tabData[voz]);
+  }
   return {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
-    tablatura: tabData,
+    tablatura: tablaturaObj,
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
     audioUrl: currentSong ? currentSong.audioUrl : ""
