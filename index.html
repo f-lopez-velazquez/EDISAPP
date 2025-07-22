@@ -74,10 +74,32 @@
         <div style="margin-top:18px;">
           <button id="save-song" type="submit">Guardar canción</button>
           <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
+          <button id="rehearsal-btn" type="button" style="background:#5e47a1; color:#fff;">Ensayo en vivo</button>
           <button id="cancel-edit" type="button" style="background:#888;margin-left:8px;">Cancelar</button>
         </div>
         <div id="last-saved" style="font-size:0.95em; color:#999;margin-top:6px;"></div>
       </form>
+      <!-- Modal para ensayo en vivo -->
+      <div id="rehearsal-modal" class="modal-bg" style="display:none;">
+        <div class="modal-box" id="rehearsal-box">
+          <h2>Ensayo en vivo</h2>
+          <label>Modo de ensayo:
+            <select id="rehearsal-mode">
+              <option value="letra">Letra + acordes (karaoke)</option>
+              <option value="tablatura">Tablatura animada</option>
+              <option value="sincronizar">Sincronizar con audio (si hay)</option>
+              <!-- <option value="ia">IA: Validar acordes/ejecución</option> -->
+            </select>
+          </label>
+          <label>Velocidad:
+            <input type="range" id="rehearsal-speed" min="0.5" max="2.5" step="0.01" value="1"/>
+            <span id="rehearsal-speed-label">Normal</span>
+          </label>
+          <button id="start-rehearsal" type="button">Comenzar</button>
+          <button id="stop-rehearsal" type="button" style="background:#888;">Cerrar</button>
+          <div id="rehearsal-area"></div>
+        </div>
+      </div>
     </section>
   </main>
   <div id="toast"></div>

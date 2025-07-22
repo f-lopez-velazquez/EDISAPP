@@ -18,7 +18,6 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// --- CONSTS Y ESTADO GLOBAL ---
 const ADMIN_EMAIL = "edis.ugto@gmail.com";
 let isAdmin = false;
 let currentUser = null;
@@ -31,7 +30,6 @@ const INSTRUMENTS = {
   contrabajo: { name: "Contrabajo", strings: 4 },
   guitarron: { name: "Guitarrón", strings: 6 }
 };
-
 const DEFAULT_BEATS = 16;
 const DEFAULT_ARREGLOS = ["arreglo 1"];
 
@@ -47,7 +45,7 @@ let rasgueoArr = [];
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
-// --- DOM ELEMENTS ---
+// DOM Elements (completa esta parte con tus ids en HTML)
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -79,7 +77,16 @@ const loginPass = document.getElementById("login-pass");
 const doLoginBtn = document.getElementById("do-login-btn");
 const loginError = document.getElementById("login-error");
 
-// --- AUTENTICACIÓN ---
+// Ensayo en vivo:
+const rehearsalBtn = document.getElementById("rehearsal-btn");
+const rehearsalModal = document.getElementById("rehearsal-modal");
+const rehearsalBox = document.getElementById("rehearsal-box");
+const rehearsalArea = document.getElementById("rehearsal-area");
+const rehearsalModeSel = document.getElementById("rehearsal-mode");
+const rehearsalSpeedInput = document.getElementById("rehearsal-speed");
+const rehearsalSpeedLabel = document.getElementById("rehearsal-speed-label");
+const startRehearsalBtn = document.getElementById("start-rehearsal");
+const stopRehearsalBtn = document.getElementById("stop-rehearsal");
 function updateAuthUI() {
   if (isAdmin) {
     authUserSpan.textContent = "Editor: " + currentUser.email;
@@ -138,8 +145,6 @@ onAuthStateChanged(auth, user=>{
   isAdmin = (user && user.email===ADMIN_EMAIL);
   updateAuthUI();
 });
-
-// --- SERIALIZACIÓN TABLATURA (Firestore: solo objetos, no arrays anidados) ---
 function serializeTab(tabMatriz) {
   const obj = {};
   for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
@@ -151,7 +156,6 @@ function deserializeTab(tabObj) {
   return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
 }
 
-// --- FIRESTORE EN VIVO (lista de canciones) ---
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
@@ -173,8 +177,6 @@ function selectSong(id) {
   isNew = false;
   fillFormFromSong(currentSong);
 }
-
-// --- EDITOR: INICIALIZAR O LIMPIAR ---
 function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
@@ -232,22 +234,6 @@ function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr].strings;
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-
-// --- CAMBIAR INSTRUMENTO PRINCIPAL ---
-instrumentoSel.onchange = () => {
-  currentInstrument = instrumentoSel.value;
-  arreglos = [...DEFAULT_ARREGLOS];
-  currentArreglo = arreglos[0];
-  for(const ar of arreglos) {
-    let key = `${currentInstrument}_${ar}`;
-    if(!tabData[key]) tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
-  }
-  renderArreglosBtns();
-  renderTablatureEditorSVG();
-  renderRasgueoEditor();
-};
-
-// --- BOTONES DE ARREGLOS ---
 function renderArreglosBtns() {
   arreglosList.innerHTML = "";
   arreglos.forEach(ar=>{
@@ -302,7 +288,6 @@ delColBtn.onclick = () => {
   }
 };
 
-// --- TABLATURA SVG EDITABLE ---
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
   let t = tabData[`${currentInstrument}_${currentArreglo}`];
@@ -391,7 +376,7 @@ function renderTablatureEditorSVG() {
             let nuevo = prompt("Número de dedo/traste (vacío para quitar):", prevVal);
             if(nuevo!==null && nuevo!=="") {
               let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-              t[s][b] = {val: nuevo, trino:setTrino};
+              t[s][b] =               t[s][b] = {val: nuevo, trino:setTrino};
             } else {
               t[s][b] = "";
             }
@@ -426,8 +411,7 @@ function renderTablatureEditorSVG() {
   tablaturaDiv.appendChild(svg);
 }
 
-// --- LETRA EDITABLE + ACORDES (acorde arriba perfectamente centrado) ---
-function renderLetraEditor() {
+function renderLetraEditor(karaokeIdx = -1) {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
     const span = document.createElement("span");
@@ -438,6 +422,9 @@ function renderLetraEditor() {
       chord.className = "chord-above";
       chord.textContent = acordesArriba[i];
       span.appendChild(chord);
+    }
+    if (karaokeIdx === i) {
+      span.classList.add("karaoke-active");
     }
     if (isAdmin) {
       span.onclick = (e) => {
@@ -462,7 +449,6 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
-// --- RASGUEO (solo guitarra, bajo = "B") ---
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -519,7 +505,7 @@ function renderRasgueoEditor() {
   rasgueoDiv.appendChild(controls);
 }
 
-// --- AUDIO ---
+// AUDIO
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -528,7 +514,7 @@ audioUpload.onchange = function (e) {
   audioPlayer.style.display = "";
 };
 
-// --- NUEVA CANCIÓN ---
+// NUEVA CANCIÓN
 newSongBtn.onclick = () => {
   if (!isAdmin) return;
   isNew = true;
@@ -537,14 +523,14 @@ newSongBtn.onclick = () => {
   songTitleInput.focus();
 };
 
-// --- CANCELAR EDICIÓN ---
+// CANCELAR
 cancelBtn.onclick = (e) => {
   e.preventDefault();
   if (songList.length && currentSong) fillFormFromSong(currentSong);
   else clearEditor();
 };
 
-// --- GUARDADO EN FIRESTORE ---
+// GUARDADO EN FIRESTORE
 songForm.onsubmit = async function(e) {
   e.preventDefault();
   if (!isAdmin) return;
@@ -585,7 +571,7 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 
-// --- AUTOGUARDADO ---
+// AUTOGUARDADO
 function getCurrentSongData() {
   const tablaturaObj = {};
   for(const ar of arreglos) {
@@ -616,16 +602,274 @@ setInterval(async ()=>{
   }
 }, 15000);
 
-// --- EXPORTAR PDF ---
+// PDF export estético
 pdfBtn.onclick = ()=>{
-  let seccion = document.getElementById("song-editor-section");
-  html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
+  // Clona la sección, la limpia y la ajusta antes de exportar para PDF bonito
+  let node = document.getElementById("song-editor-section").cloneNode(true);
+  // Borra botones, barras, controles no relevantes
+  Array.from(node.querySelectorAll('button, input[type="file"], #last-saved, #toast, .editor-group>h3')).forEach(e=>e.remove());
+  Array.from(node.querySelectorAll('textarea, select')).forEach(e=>{
+    let span = document.createElement("div");
+    span.textContent = e.value;
+    span.style.fontSize = "1.05em";
+    span.style.padding = "4px";
+    e.replaceWith(span);
+  });
+  html2pdf().set({
+    margin: 10,
+    filename: (songTitleInput.value||"cancion") + ".pdf",
+    jsPDF: {format: 'a4', orientation: 'portrait'},
+    image: { type: 'jpeg', quality: 0.99 }
+  }).from(node).save();
+};
+// === ENSAYO EN VIVO ===
+let rehearsalRunning = false, rehearsalTimeout = null, karaokeCurrent = -1;
+let rehearsalAudioObj = null;
+
+rehearsalBtn.onclick = ()=>{
+  rehearsalModal.style.display = "";
+  rehearsalArea.innerHTML = "";
+  rehearsalModeSel.value = "letra";
+  rehearsalSpeedInput.value = 1;
+  rehearsalSpeedLabel.textContent = "Normal";
+};
+stopRehearsalBtn.onclick = stopRehearsal;
+rehearsalModal.onclick = (e)=>{
+  if (e.target === rehearsalModal) stopRehearsal();
+};
+rehearsalSpeedInput.oninput = ()=>{
+  let v = Number(rehearsalSpeedInput.value);
+  if (v < 0.75) rehearsalSpeedLabel.textContent = "Lento";
+  else if (v < 1.1) rehearsalSpeedLabel.textContent = "Normal";
+  else rehearsalSpeedLabel.textContent = v+"x";
 };
 
-// --- FEEDBACK TOAST ---
+// START ENSAYO
+startRehearsalBtn.onclick = ()=>{
+  let mode = rehearsalModeSel.value;
+  let speed = Number(rehearsalSpeedInput.value);
+  stopRehearsal();
+  rehearsalArea.innerHTML = "";
+  if (mode==="letra") startKaraoke(speed);
+  else if (mode==="tablatura") startTablatureScroll(speed);
+  else if (mode==="sincronizar") startAudioKaraokeSync(speed);
+  rehearsalRunning = true;
+};
+
+// --- KARAOKE LETRA + ACORDES (scroll animado) ---
+function startKaraoke(speed=1) {
+  if (!letraOriginal) { rehearsalArea.textContent="No hay letra."; return; }
+  let chunks = [];
+  rehearsalArea.innerHTML = "";
+  // Creamos los spans igual que en renderLetraEditor pero con karaoke-active en movimiento
+  for (let i=0;i<letraOriginal.length;i++) {
+    const span = document.createElement("span");
+    span.className = "lyric-chunk";
+    span.textContent = letraOriginal[i];
+    span.style.transition = "background 0.12s";
+    if (acordesArriba[i]) {
+      const chord = document.createElement("span");
+      chord.className = "chord-above";
+      chord.textContent = acordesArriba[i];
+      span.appendChild(chord);
+    }
+    rehearsalArea.appendChild(span);
+    chunks.push(span);
+  }
+  let idx = 0;
+  function next() {
+    if (!rehearsalRunning) return;
+    if (idx > 0) chunks[idx-1].classList.remove("karaoke-active");
+    if (idx < chunks.length) {
+      chunks[idx].classList.add("karaoke-active");
+      // Si el span no está visible, hacemos scroll
+      let rect = chunks[idx].getBoundingClientRect();
+      let areaRect = rehearsalArea.getBoundingClientRect();
+      if (rect.bottom > areaRect.bottom || rect.top < areaRect.top)
+        chunks[idx].scrollIntoView({behavior:'smooth', block:'center'});
+      idx++;
+      rehearsalTimeout = setTimeout(next, 200/speed); // ajusta velocidad aquí
+    } else {
+      rehearsalRunning = false;
+      rehearsalTimeout = null;
+    }
+  }
+  next();
+}
+
+// --- TABLATURA: scroll por beats (fácil de expandir) ---
+function startTablatureScroll(speed=1) {
+  let t = tabData[`${currentInstrument}_${currentArreglo}`];
+  if (!t) { rehearsalArea.textContent="No hay tablatura."; return; }
+  const numStrings = t.length;
+  const numBeats = t[0].length;
+  const width = 48 * numBeats + 10;
+  const height = 30 * (numStrings-1) + 30;
+  let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height+40);
+  svg.style.background = "#fafafc";
+  svg.style.borderRadius = "10px";
+  svg.style.boxShadow = "0 2px 10px #0001";
+  for (let s = 0; s < numStrings; s++) {
+    let y = 15 + s*30;
+    let line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1", 0);
+    line.setAttribute("y1", y);
+    line.setAttribute("x2", width);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "#bbb");
+    line.setAttribute("stroke-width", "2");
+    svg.appendChild(line);
+  }
+  // vertical lines
+  for (let b = 0; b < numBeats; b++) {
+    let x = 24 + b*48;
+    let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
+    vline.setAttribute("x1", x);
+    vline.setAttribute("y1", 10);
+    vline.setAttribute("x2", x);
+    vline.setAttribute("y2", height-10);
+    vline.setAttribute("stroke", "#e0deee");
+    vline.setAttribute("stroke-width", "1");
+    svg.appendChild(vline);
+  }
+  // markers que se animan
+  let beatMarkers = [];
+  for (let b=0; b<numBeats; b++) {
+    let x = 24 + b*48;
+    let marker = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    marker.setAttribute("x", x-18); marker.setAttribute("y", 0);
+    marker.setAttribute("width", 36); marker.setAttribute("height", height+15);
+    marker.setAttribute("fill", "#ffe082");
+    marker.setAttribute("opacity", "0");
+    svg.appendChild(marker);
+    beatMarkers.push(marker);
+    // Círculos y números
+    for (let s=0;s<numStrings;s++) {
+      let valObj = t[s][b];
+      let val = "", trino = false;
+      if(typeof valObj === "object" && valObj) {
+        val = valObj.val; trino = !!valObj.trino;
+      } else val = valObj;
+      if(val) {
+        let y = 15 + s*30;
+        let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x);
+        circle.setAttribute("cy", y);
+        circle.setAttribute("r", 13);
+        circle.setAttribute("fill", "#3b306c");
+        circle.setAttribute("stroke", "#e7e5f1");
+        circle.setAttribute("stroke-width", "2");
+        g.appendChild(circle);
+        let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        txt.setAttribute("x", x);
+        txt.setAttribute("y", y+5);
+        txt.setAttribute("text-anchor", "middle");
+        txt.setAttribute("fill", "#fff");
+        txt.setAttribute("font-size", "17");
+        txt.setAttribute("font-weight", "bold");
+        txt.textContent = val;
+        g.appendChild(txt);
+        if(trino) {
+          let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          trinoTxt.setAttribute("x", x);
+          trinoTxt.setAttribute("y", y-18);
+          trinoTxt.setAttribute("text-anchor", "middle");
+          trinoTxt.setAttribute("fill", "#e39d1b");
+          trinoTxt.setAttribute("font-size", "18");
+          trinoTxt.setAttribute("font-weight", "bold");
+          trinoTxt.textContent = "tr~";
+          g.appendChild(trinoTxt);
+        }
+        svg.appendChild(g);
+      }
+    }
+  }
+  rehearsalArea.appendChild(svg);
+  // Animación
+  let idx=0;
+  function nextBeat() {
+    if (!rehearsalRunning) return;
+    if (idx>0) beatMarkers[idx-1].setAttribute("opacity","0");
+    if (idx<numBeats) {
+      beatMarkers[idx].setAttribute("opacity","0.34");
+      svg.scrollLeft = Math.max(0, 24+idx*48-150);
+      idx++;
+      rehearsalTimeout = setTimeout(nextBeat, 350/speed);
+    } else {
+      rehearsalRunning = false; rehearsalTimeout = null;
+    }
+  }
+  nextBeat();
+}
+
+// --- KARAOKE sincronizado con AUDIO ---
+function startAudioKaraokeSync(speed=1) {
+  if (!audioPlayer.src || audioPlayer.src==="" || audioPlayer.src.startsWith("blob:")) {
+    rehearsalArea.innerHTML = "<div style='color:#b00'>No hay audio cargado para esta canción.</div>"; return;
+  }
+  let chunks = [];
+  rehearsalArea.innerHTML = "";
+  for (let i=0;i<letraOriginal.length;i++) {
+    const span = document.createElement("span");
+    span.className = "lyric-chunk";
+    span.textContent = letraOriginal[i];
+    span.style.transition = "background 0.12s";
+    if (acordesArriba[i]) {
+      const chord = document.createElement("span");
+      chord.className = "chord-above";
+      chord.textContent = acordesArriba[i];
+      span.appendChild(chord);
+    }
+    rehearsalArea.appendChild(span);
+    chunks.push(span);
+  }
+  // "Fake" sync: reparte la duración del audio entre todos los chunks
+  const audio = new Audio(audioPlayer.src);
+  rehearsalAudioObj = audio;
+  let duration = 0;
+  audio.onloadedmetadata = ()=>{
+    duration = audio.duration / speed;
+    let msPerChunk = duration*1000 / chunks.length;
+    let idx = 0;
+    function next() {
+      if (!rehearsalRunning) return;
+      if (idx > 0) chunks[idx-1].classList.remove("karaoke-active");
+      if (idx < chunks.length) {
+        chunks[idx].classList.add("karaoke-active");
+        let rect = chunks[idx].getBoundingClientRect();
+        let areaRect = rehearsalArea.getBoundingClientRect();
+        if (rect.bottom > areaRect.bottom || rect.top < areaRect.top)
+          chunks[idx].scrollIntoView({behavior:'smooth', block:'center'});
+        idx++;
+        rehearsalTimeout = setTimeout(next, msPerChunk);
+      } else {
+        rehearsalRunning = false; rehearsalTimeout = null;
+        audio.pause();
+      }
+    }
+    rehearsalRunning = true;
+    audio.playbackRate = speed;
+    audio.play();
+    next();
+  };
+  audio.load();
+}
+
+function stopRehearsal() {
+  rehearsalRunning = false;
+  rehearsalTimeout && clearTimeout(rehearsalTimeout);
+  rehearsalTimeout = null;
+  if (rehearsalAudioObj) { rehearsalAudioObj.pause(); rehearsalAudioObj = null; }
+  rehearsalModal.style.display = "none";
+  karaokeCurrent = -1;
+}
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("visible");
   setTimeout(()=>toast.classList.remove("visible"), 1700);
 }
 clearEditor();
+
