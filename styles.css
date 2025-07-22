@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 body {
   font-family: 'Segoe UI', Arial, sans-serif;
   margin: 0; padding: 0;
@@ -112,3 +113,119 @@ select { border-radius: 6px; border: 1.1px solid #888; font-size: 1em; padding: 
   opacity:0; pointer-events:none; transition:opacity .22s;
 }
 #toast.visible { opacity: 0.93; pointer-events:auto; }
+=======
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  margin: 0; padding: 0;
+  background: #191919;
+}
+header .header-bg {
+  background: #000;
+  padding: .9em 1.6em;
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  box-shadow: 0 2px 12px #0005;
+}
+header .logo {
+  height: 70px;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+h1 { margin: 0; color: #fff; }
+main { display: flex; min-height: 88vh; }
+#song-list-container {
+  width: 340px; background: #141424;
+  border-right: 2.5px solid #2f264c;
+  color: #fff;
+  padding: 2.5em 1.2em 2em 1.5em;
+  display: flex; flex-direction: column;
+}
+#song-list-container button {
+  margin-bottom: 20px;
+  background: #5534c4;
+  color: #fff;
+}
+#song-list {
+  list-style: none; padding: 0; margin: 0;
+}
+#song-list li {
+  padding: .7em 1em;
+  border-radius: 5px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: #282848;
+  border: none;
+  color: #fff;
+  transition: background .13s;
+  font-size: 1.03em;
+}
+#song-list li.selected { background: #ffe082; color: #222; }
+section#song-editor-section {
+  flex: 1; background: #f5f6fa;
+  padding: 2.5em 3em;
+}
+#song-form label { display: block; margin-bottom: 13px; font-weight: bold; }
+#song-form input[type="text"],
+#song-form textarea, #song-form select {
+  width: 99%; margin-top: 4px; margin-bottom: 2px;
+  padding: 6px; font-size: 1em; border-radius: 7px; border: 1px solid #bbb;
+  font-family: 'Menlo', monospace;
+  background: #fff;
+}
+.editor-group { margin: 18px 0; }
+#tablatura { margin-bottom: 1em; overflow-x: auto; background: #fff; border-radius:8px; padding:12px;}
+.tablature-table {
+  border-collapse: collapse; margin: 0 auto 0 0; width:auto;
+  position:relative;
+}
+#tablatura svg { display:block; margin:0 auto;}
+button, .voz-btn {
+  background: #3b306c; color: #fff;
+  border: none; border-radius: 8px; padding: 7px 19px; font-size: 1em;
+  margin: 0 7px 12px 0; cursor: pointer; transition: background .14s;
+}
+button:hover, .voz-btn:hover { background: #5e47a1; }
+#cancel-edit:hover { background: #aaa; color: #111; }
+#pdf-song:hover { background: #e7c574; color: #3b306c;}
+.voz-btn { padding:5px 14px; margin:0 7px 0 0; border-radius:7px; border:none; background:#dad8f2; color:#29244b; font-size:1em; font-weight:bold; cursor:pointer;}
+.voz-btn.active { background: #ffe082; color: #222; }
+#letra {
+  background: #fff; border: 1.4px solid #aaa;
+  border-radius: 8px; padding: 1.2em;
+  min-height: 55px; font-size: 1.15em;
+  font-family: 'Menlo', 'Consolas', 'monospace', 'Segoe UI';
+  word-break: break-all; margin-bottom: 2em;
+}
+.chord-above {
+  position: relative; top: -1.65em; color: #3b306c; background: #e7e5f1;
+  border-radius: 4px; padding: 1px 7px; font-weight: bold; font-size: .95em;
+  pointer-events: none;
+}
+.lyric-chunk {
+  position: relative; display: inline-block; min-width: 11px; cursor: pointer;
+  transition: background .18s; padding: 0 1.5px;
+}
+.lyric-chunk:hover { background: #ffe082; }
+textarea { border-radius: 7px; border: 1.1px solid #aaa; font-size: 1.04em; font-family: 'Menlo', monospace; padding: 6px 7px; margin-bottom: 6px; background: #f7f6fa; }
+select { border-radius: 6px; border: 1.1px solid #888; font-size: 1em; padding: 4px 9px; background: #f7f6fa; }
+#rasgueo {
+  background: #fff; border-radius:8px; border:1.1px solid #d2d2f4; padding: 1.2em; margin-bottom: 1em; font-size: 1.13em; min-height:32px;
+  display:flex; flex-wrap: wrap; gap:10px;
+}
+.rasgueo-icon {
+  font-size: 2em; cursor:pointer; transition:transform .12s; user-select:none;
+}
+.rasgueo-btn-add {
+  background: #3b306c; color:#fff; border:none; border-radius: 8px; padding: 5px 16px; cursor:pointer; font-size:1.12em;
+}
+.rasgueo-icon.selected { transform: scale(1.13); color: #eb9b00;}
+#toast {
+  position:fixed; top:22px; right:22px; background:#333; color:#fff;
+  padding:1.1em 2em; border-radius:12px; z-index:100; font-size:1.13em;
+  opacity:0; pointer-events:none; transition:opacity .22s;
+}
+#toast.visible { opacity: 0.93; pointer-events:auto; }
+>>>>>>> 1338533770c3b231b93085f167e78a73a02cb430

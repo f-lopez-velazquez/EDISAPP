@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -76,3 +77,83 @@
   <script type="module" src="main.js"></script>
 </body>
 </html>
+=======
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cancionero Estudiantina FIMEE</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <header>
+    <div class="header-bg">
+      <img src="https://i.imgur.com/sRgWLhM.png" alt="Logo Estudiantina" class="logo"/>
+      <h1>Cancionero Estudiantina FIMEE</h1>
+    </div>
+  </header>
+  <main>
+    <aside id="song-list-container">
+      <button id="new-song-btn">+ Nueva canción</button>
+      <ul id="song-list"></ul>
+    </aside>
+    <section id="song-editor-section">
+      <form id="song-form" autocomplete="off">
+        <label>
+          Título:
+          <input type="text" id="song-title" required />
+        </label>
+        <label>
+          Letra de la canción:
+          <textarea id="letra-in" rows="6" required></textarea>
+        </label>
+        <label>
+          Instrumento principal:
+          <select id="instrumento">
+            <option value="guitarra">Guitarra (6)</option>
+            <option value="laud">Laúd (6)</option>
+            <option value="bandurria">Bandurria (6)</option>
+            <option value="mandolina">Mandolina/Tricordio (4)</option>
+            <option value="contrabajo">Contrabajo (4)</option>
+            <option value="guitarron">Guitarrón (6)</option>
+          </select>
+        </label>
+        <label>
+          Subir audio (opcional): 
+          <input type="file" id="audio-upload" accept="audio/*" />
+        </label>
+        <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
+        <div class="editor-group">
+          <h3>
+            Editor de Tablatura 
+            <span id="tabs-voz"></span>
+          </h3>
+          <div id="tabs-voz-btns"></div>
+          <div id="tablatura"></div>
+          <button id="add-col" type="button">+ Tiempo</button>
+          <button id="del-col" type="button">- Tiempo</button>
+        </div>
+        <div class="editor-group">
+          <h3>Editor de Rasgueo (sólo guitarra)</h3>
+          <div id="rasgueo"></div>
+        </div>
+        <div class="editor-group">
+          <h3>Letra y acordes</h3>
+          <div id="letra"></div>
+        </div>
+        <div style="margin-top:18px;">
+          <button id="save-song" type="submit">Guardar canción</button>
+          <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
+          <button id="cancel-edit" type="button" style="background:#888;margin-left:8px;">Cancelar</button>
+        </div>
+        <div id="last-saved" style="font-size:0.95em; color:#999;margin-top:6px;"></div>
+      </form>
+    </section>
+  </main>
+  <div id="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.9.2/dist/html2pdf.bundle.min.js"></script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
+>>>>>>> 1338533770c3b231b93085f167e78a73a02cb430
