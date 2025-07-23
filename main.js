@@ -146,7 +146,7 @@ async function renderSongView(id){
       </div>
     </div>
   `;
-  setupTabs("V",d);
+  setupTabs("V","letra",false);
 }
 
 // --- Song Editor (admin only) ---
@@ -161,10 +161,14 @@ async function renderSongEditor(id){
     const doc = await db.collection("songs").doc(id).get();
     if(doc.exists) data = Object.assign(data,doc.data());
   }
+
+  // Usamos formDraft para mantener los cambios entre tabs
+  window.formDraft = Object.assign({}, data);
+
   document.getElementById('songView').innerHTML = `
     <form id="songEditForm" class="glass" style="padding:2em;">
       <h3 style="color:var(--secondary);margin-bottom:.7em">${id?'Editar':'Nueva'} canción</h3>
-      <input required name="title" value="${data.title||''}" placeholder="Título de la canción"/>
+      <input required name="title" value="${formDraft.title||''}" placeholder="Título de la canción" id="field_title"/>
       <div class="tabs" id="tabsE">
         <button class="tab active" data-tab="letra">Letra</button>
         <button class="tab" data-tab="letraAcordes">Letra con Acordes</button>
@@ -179,7 +183,7 @@ async function renderSongEditor(id){
       <div style="margin:1em 0">
         <label style="font-size:.95em;font-weight:600;color:var(--primary)">Audio:</label><br>
         <input type="file" id="audioUpload" accept="audio/*"/>
-        ${data.audioUrl?`<audio src="${data.audioUrl}" controls style="vertical-align:middle;max-width:200px;"></audio>`:''}
+        ${formDraft.audioUrl?`<audio src="${formDraft.audioUrl}" controls style="vertical-align:middle;max-width:200px;"></audio>`:''}
       </div>
       <div class="flex-between">
         <button class="btn" type="submit">${id?'Guardar':'Crear'}</button>
@@ -187,30 +191,24 @@ async function renderSongEditor(id){
       </div>
     </form>
   `;
-  setupTabs("E",data,true);
+  setupTabs("E","letra",true); // Arranca en Letra
 
   // Save/Edit logic
   document.getElementById('songEditForm').onsubmit = async e=>{
     e.preventDefault();
     const f = e.target;
-    let newData = Object.assign({}, data);
-    newData.title = f.title.value;
-    // Resto de los campos
-    ["letra","letraAcordes","guitarra","mandolina","bandurria","laud","contrabajo","guitarron"].forEach(tab=>{
-      if(document.getElementById(`field_${tab}`)){
-        newData[tab] = getFieldValue(tab);
-      }
-    });
+    // Antes de guardar, sincroniza el draft con los campos actuales
+    syncTabDraft(currentTabE());
+    window.formDraft.title = f.title.value;
     // Guardar audio
     const file = document.getElementById("audioUpload").files[0];
     if(file){
-      const ref = storage.ref().child("audios/"+(id||newData.title)+Date.now());
+      const ref = storage.ref().child("audios/"+(id||formDraft.title)+Date.now());
       await ref.put(file);
-      newData.audioUrl = await ref.getDownloadURL();
+      formDraft.audioUrl = await ref.getDownloadURL();
     }
-    if(id) await db.collection("songs").doc(id).set(newData);
-    else await db.collection("songs").add(newData);
-    // Mensaje de guardado suave y regresar a la lista
+    if(id) await db.collection("songs").doc(id).set(formDraft);
+    else await db.collection("songs").add(formDraft);
     document.getElementById('songView').innerHTML = `
       <div class="flex-center" style="padding:3em 0">
         <h2 style="color:var(--secondary);text-align:center">¡Canción guardada correctamente!</h2>
@@ -221,36 +219,61 @@ async function renderSongEditor(id){
 
   window.cancelEdit = function(){ renderHome(); }
 
-  // Auto-guardado cada 20s
+  // Autoguardado
   if(autoSaveInterval) clearInterval(autoSaveInterval);
   autoSaveInterval = setInterval(()=>{
-    const f = document.getElementById('songEditForm');
-    if(f){
-      let tmp = {};
-      ["letra","letraAcordes","guitarra","mandolina","bandurria","laud","contrabajo","guitarron"].forEach(tab=>{
-        if(document.getElementById(`field_${tab}`)){
-          tmp[tab] = getFieldValue(tab);
-        }
-      });
-      localStorage.setItem('edis_autosave_'+(id||'new'), JSON.stringify(tmp));
-    }
+    syncTabDraft(currentTabE());
+    localStorage.setItem('edis_autosave_'+(id||'new'), JSON.stringify(window.formDraft));
   },20000);
 }
 
-// --- Tabs & Fields (Visor y Editor) ---
-function setupTabs(mode,data,isEdit){
-  // Tab handlers
+// Guarda lo editado del tab activo en formDraft
+function syncTabDraft(tab){
+  if(!window.formDraft) return;
+  // Title
+  let t = document.getElementById("field_title");
+  if(t) window.formDraft.title = t.value;
+  // Los tabs editables
+  if(tab === "letra") window.formDraft.letra = document.getElementById("field_letra")?.value||"";
+  if(tab === "letraAcordes"){
+    // Reconstruye letraAcordes desde textarea acordes
+    let linesL = (document.getElementById("acordesLetra")?.value||"").split("\n");
+    let linesA = (document.getElementById("acordesAcordes")?.value||"").split("\n");
+    let arr = [];
+    for(let i=0;i<linesL.length;i++){
+      let chars = linesL[i].split('');
+      let acordes = (linesA[i]||"").split('\t');
+      arr.push(chars.map((c,j)=>({char:c,acorde:acordes[j]||""})));
+    }
+    window.formDraft.letraAcordes = arr;
+  }
+  ["guitarra","mandolina","bandurria","laud","contrabajo","guitarron"].forEach(tipo=>{
+    if(tab === tipo){
+      let val = document.getElementById(`tabEditor_${tipo}`)?.value||"";
+      try { window.formDraft[tipo] = JSON.parse(val); } catch{ window.formDraft[tipo]=[]; }
+    }
+  });
+}
+
+// Manejo de tabs del editor y visor
+function setupTabs(mode, initTab, isEdit){
   let container = document.getElementById('tabContent'+mode);
   const tabIds = ["letra","letraAcordes","guitarra","mandolina","bandurria","laud","contrabajo","guitarron"];
+  let currentTab = initTab||tabIds[0];
+  window.currentTabE = ()=>currentTab;
   function show(tab){
+    // Si es edición, guarda el draft antes de cambiar
+    if(isEdit) syncTabDraft(currentTab);
+    currentTab = tab;
     document.querySelectorAll("#tabs"+mode+" .tab").forEach(el=>el.classList.remove("active"));
     document.querySelector(`#tabs${mode} .tab[data-tab=${tab}]`).classList.add("active");
-    container.innerHTML = getTabContent(tab,data,isEdit,mode);
+    let data = (isEdit && window.formDraft) ? window.formDraft : undefined;
+    container.innerHTML = getTabContent(tab,data||{},isEdit,mode);
   }
   document.querySelectorAll("#tabs"+mode+" .tab").forEach(btn=>{
-    btn.onclick = ()=> show(btn.dataset.tab);
+    btn.onclick = (e)=>{ e.preventDefault(); show(btn.dataset.tab);}
   });
-  show(tabIds[0]);
+  show(currentTab);
 }
 
 function getTabContent(tab, data, isEdit, mode){
@@ -304,10 +327,8 @@ function getTabContent(tab, data, isEdit, mode){
 // ----------- Letra con acordes -----------
 // Editor
 function renderAcordesEditor(base){
-  // base = [{char, acorde}] por línea
   let letra = base.map(line=>line.map(pair=>pair.char).join("")).join("\n");
   let acordes = base.map(line=>line.map(pair=>pair.acorde||"").join("\t")).join("\n");
-  // La letra NO debe ser editable aquí, viene de la pestaña Letra
   return `
     <textarea rows="7" id="acordesLetra" disabled style="background:#f5f5f5">${letra}</textarea>
     <textarea rows="7" id="acordesAcordes" placeholder="Acordes (uno por caracter, separar tabs para acordes en blanco)...">${acordes}</textarea>
@@ -330,7 +351,6 @@ function getFieldValue(tab){
     return arr;
   }
   if(tab==="letra") return document.getElementById("field_letra").value;
-  // Instrumentos: parsear estructura simple
   if(["guitarra","mandolina","bandurria","laud","contrabajo","guitarron"].includes(tab)){
     let json = document.getElementById(`tabEditor_${tab}`).value;
     try { return JSON.parse(json); } catch{ return []; }
