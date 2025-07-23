@@ -24,7 +24,7 @@ const root = document.getElementById('root');
 function renderHeader(user) {
   return `
     <div class="header">
-      <img src="https://i.imgur.com/fMC8bFu.png" alt="EDIS Logo">
+      <img src="https://i.imgur.com/N6rdt5B.png" alt="EDIS Logo">
       <h1>Cancionero EDIS</h1>
       <div>
         ${user ? `
@@ -210,8 +210,13 @@ async function renderSongEditor(id){
     }
     if(id) await db.collection("songs").doc(id).set(newData);
     else await db.collection("songs").add(newData);
-    alert("¡Guardado!");
-    renderHome();
+    // Mensaje de guardado suave y regresar a la lista
+    document.getElementById('songView').innerHTML = `
+      <div class="flex-center" style="padding:3em 0">
+        <h2 style="color:var(--secondary);text-align:center">¡Canción guardada correctamente!</h2>
+      </div>
+    `;
+    setTimeout(renderHome, 1200);
   };
 
   window.cancelEdit = function(){ renderHome(); }
@@ -260,17 +265,26 @@ function getTabContent(tab, data, isEdit, mode){
   // ---- Letra con Acordes ----
   if(tab==="letraAcordes") {
     if(isEdit){
-      // Le damos la opción de editar letra, y encima poner los acordes alineados
-      let base = data.letraAcordes && data.letraAcordes.length>0?data.letraAcordes:[];
+      // Si no hay letraAcordes, lo mapeamos automáticamente desde la letra principal
+      let base = [];
+      if (data.letraAcordes && data.letraAcordes.length > 0) {
+        base = data.letraAcordes;
+      } else if (data.letra) {
+        // Mapeo automático: cada línea, cada carácter
+        base = data.letra.split("\n").map(line =>
+          line.split('').map(c => ({ char: c, acorde: "" }))
+        );
+      }
       return `
         <div>
-          <p style="font-size:.93em;color:var(--primary)">Agrega la letra y los acordes sobre cada caracter. Deja vacío si no hay acorde.</p>
+          <p style="font-size:.93em;color:var(--primary)">
+            La letra se toma directamente de la pestaña "Letra".<br>
+            Escribe los acordes justo encima de cada letra, dejando vacío donde no hay acorde.
+          </p>
           <div id="acordesEditor">${renderAcordesEditor(base)}</div>
-          <button type="button" class="btn" onclick="editAcordesText()">Editar Letra Base</button>
         </div>
       `;
     } else {
-      // Visor: Mostrar acordes alineados sobre cada caracter
       let ac = data.letraAcordes || [];
       if(!ac.length) return "<em>No definido</em>";
       return renderAcordesViewer(ac);
@@ -293,18 +307,15 @@ function renderAcordesEditor(base){
   // base = [{char, acorde}] por línea
   let letra = base.map(line=>line.map(pair=>pair.char).join("")).join("\n");
   let acordes = base.map(line=>line.map(pair=>pair.acorde||"").join("\t")).join("\n");
+  // La letra NO debe ser editable aquí, viene de la pestaña Letra
   return `
-    <textarea rows="7" id="acordesLetra" placeholder="Letra...">${letra}</textarea>
+    <textarea rows="7" id="acordesLetra" disabled style="background:#f5f5f5">${letra}</textarea>
     <textarea rows="7" id="acordesAcordes" placeholder="Acordes (uno por caracter, separar tabs para acordes en blanco)...">${acordes}</textarea>
-    <p style="font-size:.95em;color:#6bb1de;margin:5px 0">Alinea los acordes encima de cada caracter de la letra.</p>
+    <p style="font-size:.95em;color:#6bb1de;margin:5px 0">
+      La letra viene directamente de la pestaña "Letra".<br>
+      Solo escribe acordes alineados con cada letra.
+    </p>
   `;
-}
-window.editAcordesText = function(){
-  let l = prompt("Edita la letra base (será re-mapeada con acordes).");
-  if(l) {
-    document.getElementById("acordesLetra").value = l;
-    document.getElementById("acordesAcordes").value = "";
-  }
 }
 function getFieldValue(tab){
   if(tab==="letraAcordes"){
@@ -321,7 +332,6 @@ function getFieldValue(tab){
   if(tab==="letra") return document.getElementById("field_letra").value;
   // Instrumentos: parsear estructura simple
   if(["guitarra","mandolina","bandurria","laud","contrabajo","guitarron"].includes(tab)){
-    // Guardar como un arreglo de notas [{arreglo:"arreglo1", data:[{time, cuerda, value, tipo}] }]
     let json = document.getElementById(`tabEditor_${tab}`).value;
     try { return JSON.parse(json); } catch{ return []; }
   }
@@ -347,7 +357,6 @@ function renderAcordesViewer(base){
 
 // --------------- Tablatura Editor/Viewer ---------------
 function renderTablatureEditor(tipo, arr){
-  // Estructura mínima: [{arreglo:"arreglo1", data:[{time, cuerda, value, tipo}]}]
   let json = JSON.stringify(arr||[],null,2);
   return `
     <textarea rows="8" id="tabEditor_${tipo}" placeholder="Estructura JSON (arreglo de arreglos con notas)">
@@ -359,24 +368,18 @@ ${json}
 }
 function renderTablatureViewer(tipo, arr){
   if(!arr || !arr.length) return "<em>No definido</em>";
-  // Mostramos primer arreglo (arreglo1) por default
   let data = arr[0]?.data || [];
   let cuerdas = 6;
   if(tipo==="mandolina"||tipo==="contrabajo") cuerdas = 4;
-  // Calculamos cantidad de tiempos
   let tiempos = Math.max(...data.map(n=>n.time))+1||8;
   let frets = cuerdas===6?6:0;
-  // Render
   let out = `<div class="tablature"><div class="tab-strings" style="height:${cuerdas*28}px;width:${tiempos*42}px;position:relative">`;
-  // Strings
   for(let s=0;s<cuerdas;s++){
     out+=`<div class="tab-row" style="top:${s*28}px;position:absolute;width:100%"><div class="tab-string" style="top:50%"></div></div>`;
   }
-  // Vertical time lines
   for(let t=0;t<tiempos;t++){
     out+=`<div class="tab-fret" style="left:${t*42}px;height:${cuerdas*28}px"></div>`;
   }
-  // Notas (círculos)
   data.forEach(n=>{
     let y = n.cuerda*28+14;
     let x = n.time*42+21;
