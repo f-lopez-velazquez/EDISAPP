@@ -1,4 +1,77 @@
-// ===== 1. Inicialización y Firebase =====
+// ===================== MAIN.JS =====================
+
+// --- 1. LOGIN, ROLES Y ADMIN ---
+const ADMIN_MAIL = "edis.ugto@gmail.com";
+let adminMode = false;
+let currentUser = null;
+
+function renderLoginBox() {
+  document.body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:98vh;background:#191919">
+      <div style="background:#fff;border-radius:13px;box-shadow:0 2px 22px #0003;padding:2.7em 2.5em;max-width:340px;">
+        <img src="https://i.imgur.com/sRgWLhM.png" style="display:block;margin:0 auto 20px auto;height:70px;">
+        <h2 style="text-align:center;color:#243857;margin-bottom:24px;">Acceso EDIS</h2>
+        <form id="loginform">
+          <input type="email" id="login-mail" placeholder="Correo" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
+          <input type="password" id="login-pass" placeholder="Contraseña" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
+          <button style="width:100%;background:#243857;color:#fff;padding:11px;border:none;border-radius:7px;font-size:1.1em;cursor:pointer;">Entrar</button>
+        </form>
+        <button id="entrar-solo-usuario" style="width:100%;margin-top:13px;background:#eee;color:#243857;padding:11px;border:none;border-radius:7px;font-size:1.04em;cursor:pointer;">
+          Solo ver como usuario
+        </button>
+      </div>
+    </div>
+  `;
+  document.getElementById("loginform").onsubmit = e => {
+    e.preventDefault();
+    const mail = document.getElementById("login-mail").value.trim();
+    const pass = document.getElementById("login-pass").value;
+    if (mail === ADMIN_MAIL && pass === "jijijija55") {
+      adminMode = true;
+      currentUser = {email: ADMIN_MAIL};
+      location.reload();
+    } else {
+      alert("Usuario/contraseña incorrectos");
+    }
+  };
+  document.getElementById("entrar-solo-usuario").onclick = ()=>{
+    adminMode = false;
+    currentUser = null;
+    location.reload();
+  }
+}
+
+function setupAdminUI() {
+  const ui = document.getElementById("user-info");
+  if (!ui) return;
+  if (adminMode) {
+    ui.innerHTML = `
+      <span style="font-weight:bold;color:#ffe082;">Administrador</span>
+      <button style="margin-left:20px;background:#ffe082;color:#29244b;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="logoutBtn">Salir</button>
+      <button style="margin-left:15px;background:#3b306c;color:#fff;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="verSoloBtn">Ver como usuario</button>
+    `;
+    document.getElementById("logoutBtn").onclick = ()=>{
+      adminMode = false;
+      currentUser = null;
+      location.reload();
+    };
+    document.getElementById("verSoloBtn").onclick = ()=>{
+      adminMode = false;
+      currentUser = null;
+      location.reload();
+    };
+  } else {
+    ui.innerHTML = `
+      <span style="color:#eee;">Modo visualización</span>
+      <button style="margin-left:15px;background:#3b306c;color:#fff;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="loginBtn">Admin</button>
+    `;
+    document.getElementById("loginBtn").onclick = ()=>{
+      renderLoginBox();
+    };
+  }
+}
+
+// --- 2. FIREBASE INIT ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
@@ -15,56 +88,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-const ADMIN_MAIL = "edis.ugto@gmail.com";
-let currentUser = null; // Null = sin login
-let adminMode = false;
-
-// Simula login básico para el admin
-function renderLoginBox() {
-  document.body.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:98vh;background:#191919">
-      <div style="background:#fff;border-radius:13px;box-shadow:0 2px 22px #0003;padding:2.7em 2.5em;max-width:340px;">
-        <img src="https://i.imgur.com/N6rdt5B.png" style="display:block;margin:0 auto 20px auto;height:60px;">
-        <h2 style="text-align:center;color:#243857;margin-bottom:24px;">Acceso EDIS</h2>
-        <form id="loginform">
-          <input type="email" id="login-mail" placeholder="Correo" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
-          <input type="password" id="login-pass" placeholder="Contraseña" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
-          <button style="width:100%;background:#243857;color:#fff;padding:11px;border:none;border-radius:7px;font-size:1.1em;cursor:pointer;">Entrar</button>
-        </form>
-      </div>
-    </div>
-  `;
-  document.getElementById("loginform").onsubmit = e => {
-    e.preventDefault();
-    const mail = document.getElementById("login-mail").value.trim();
-    const pass = document.getElementById("login-pass").value;
-    if (mail === ADMIN_MAIL && pass === "jijijija55") {
-      adminMode = true;
-      currentUser = {email: ADMIN_MAIL};
-      location.reload();
-    } else {
-      alert("Usuario/contraseña incorrectos");
-    }
-  }
-}
-function setupAdminUI() {
-  const ui = document.getElementById("user-info");
-  if (!ui) return;
-  if (adminMode) {
-    ui.innerHTML = `<span style="font-weight:bold;color:#ffe082;">Administrador</span> 
-    <button style="margin-left:20px;background:#ffe082;color:#29244b;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="logoutBtn">Salir</button>`;
-    document.getElementById("logoutBtn").onclick = ()=>{
-      adminMode = false;
-      currentUser = null;
-      location.reload();
-    }
-  } else {
-    ui.innerHTML = `<span style="color:#eee;">Modo visualización</span>`;
-  }
-}
-// ====== FIN LOGIN/ADMIN =====
-
-// ==== Variables principales ====
+// --- 3. VARIABLES PRINCIPALES Y INSTRUMENTOS ---
 const INSTRUMENTS = {
   guitarra: 6, laud: 6, bandurria: 6, mandolina: 4, tricordio: 4, contrabajo: 4, guitarron: 6
 };
@@ -82,7 +106,6 @@ const DEFAULT_BEATS = 16;
 let songList = [];
 let currentSong = null;
 let isNew = false;
-
 let tabData = {}; // {voz: matriz}
 let letraOriginal = "";
 let acordesArriba = {};
@@ -91,6 +114,7 @@ let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
+// --- 4. REFERENCIAS A ELEMENTOS DEL DOM ---
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -114,8 +138,7 @@ const lastSavedDiv = document.getElementById("last-saved");
 const ensayoBtn = document.getElementById("ensayo-song");
 const ensayoVivoDiv = document.getElementById("ensayo-vivo");
 
-// ========= FUNCIONES CRUD ===========
-
+// --- 5. LISTADO DE CANCIONES ---
 async function loadSongList() {
   songList = [];
   songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
@@ -138,9 +161,6 @@ function selectSong(id) {
   currentSong = songList.find(s=>s.id===id);
   isNew = false;
   fillFormFromSong(currentSong);
-}
-function getInstrLabel(instr) {
-  return `${instr.charAt(0).toUpperCase()+instr.slice(1)} (${INSTRUMENTS[instr]})`;
 }
 function clearEditor() {
   songTitleInput.value = "";
@@ -626,6 +646,10 @@ ensayoBtn.onclick = ()=>{
 };
 
 // ========== 12. INICIO ==========
-setupAdminUI();
-loadSongList();
-clearEditor();
+if (!adminMode && !currentUser) {
+  renderLoginBox();
+} else {
+  setupAdminUI();
+  loadSongList();
+  clearEditor();
+}
