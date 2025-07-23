@@ -31,17 +31,17 @@
         </label>
         <label>
           Letra de la canción:
-          <textarea id="letra-in" rows="6" required></textarea>
+          <textarea id="letra-in" rows="6" required placeholder="Letra de la canción aquí..."></textarea>
         </label>
         <label>
           Instrumento principal:
           <select id="instrumento">
-            <option value="guitarra">Guitarra (6)</option>
-            <option value="laud">Laúd (6)</option>
-            <option value="bandurria">Bandurria (6)</option>
-            <option value="mandolina_tricordio">Mandolina/Tricordio (4)</option>
-            <option value="contrabajo">Contrabajo (4)</option>
-            <option value="guitarron">Guitarrón (6)</option>
+            <option value="guitarra">Guitarra (6 cuerdas)</option>
+            <option value="laud">Laúd (6 cuerdas)</option>
+            <option value="bandurria">Bandurria (6 cuerdas)</option>
+            <option value="mandolina_tricordio">Mandolina/Tricordio (4 cuerdas)</option>
+            <option value="contrabajo">Contrabajo (4 cuerdas)</option>
+            <option value="guitarron">Guitarrón (6 cuerdas)</option>
           </select>
         </label>
         <label>
@@ -50,17 +50,17 @@
         </label>
         <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
         <div class="editor-group">
-          <h3>
-            Editor de Tablatura 
-            <span id="tabs-voz"></span>
-          </h3>
+          <h3>Editor de Tablatura y Letra Integrada</h3>
           <div id="arreglos-list"></div>
-          <div id="tablatura"></div>
-          <div id="tab-col-controls">
-            <button id="add-col" type="button">+ Tiempo</button>
-            <button id="del-col" type="button">- Tiempo</button>
-            <button id="add-arreglo" type="button">+ Arreglo</button>
-            <button id="del-arreglo" type="button">- Arreglo</button>
+          <div id="tablatura-responsive-container">
+            <div id="tablatura"></div>
+            <div id="tablatura-controls">
+              <button id="add-col" type="button">+ Traste/Tiempo</button>
+              <button id="del-col" type="button">- Traste/Tiempo</button>
+              <button id="add-arreglo" type="button">+ Arreglo</button>
+              <button id="del-arreglo" type="button">- Arreglo</button>
+              <button id="toggle-lyrics" type="button">Mostrar/Ocultar letra</button>
+            </div>
           </div>
         </div>
         <div class="editor-group">
@@ -68,10 +68,10 @@
           <div id="rasgueo"></div>
         </div>
         <div class="editor-group">
-          <h3>Letra y acordes</h3>
+          <h3>Letra y acordes (mapear acorde en cualquier letra)</h3>
           <div id="letra"></div>
         </div>
-        <div style="margin-top:18px;">
+        <div class="editor-btn-row">
           <button id="save-song" type="submit">Guardar canción</button>
           <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
           <button id="rehearsal-btn" type="button" style="background:#5e47a1; color:#fff;">Ensayo en vivo</button>
@@ -88,7 +88,6 @@
               <option value="letra">Letra + acordes (karaoke)</option>
               <option value="tablatura">Tablatura animada</option>
               <option value="sincronizar">Sincronizar con audio (si hay)</option>
-              <!-- <option value="ia">IA: Validar acordes/ejecución</option> -->
             </select>
           </label>
           <label>Velocidad:
@@ -102,6 +101,11 @@
       </div>
     </section>
   </main>
+  <footer>
+    <div class="footer-bg">
+      Creado por Francisco López Velázquez &copy; 2024
+    </div>
+  </footer>
   <div id="toast"></div>
   <div id="modal-bg" class="modal-bg" style="display:none;">
     <div class="modal-box" id="login-modal">

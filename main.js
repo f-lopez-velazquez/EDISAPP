@@ -1,4 +1,4 @@
-// --- FIREBASE CONFIG Y LIBS ---
+// --- FIREBASE SDK (usar módulos) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
@@ -18,21 +18,24 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
+// --- ROLES Y ESTADO GLOBAL ---
 const ADMIN_EMAIL = "edis.ugto@gmail.com";
 let isAdmin = false;
 let currentUser = null;
 
+// Instrumentos y especificaciones (nomenclatura estándar, cuerdas, trastes para guitarra)
 const INSTRUMENTS = {
-  guitarra: { name: "Guitarra", strings: 6 },
+  guitarra: { name: "Guitarra", strings: 6, trastes: 12 },
   laud: { name: "Laúd", strings: 6 },
   bandurria: { name: "Bandurria", strings: 6 },
   mandolina_tricordio: { name: "Mandolina/Tricordio", strings: 4 },
   contrabajo: { name: "Contrabajo", strings: 4 },
   guitarron: { name: "Guitarrón", strings: 6 }
 };
-const DEFAULT_BEATS = 16;
 const DEFAULT_ARREGLOS = ["arreglo 1"];
+const DEFAULT_TRATES = 12; // Guitarra usa trastes
 
+// Estado de canción actual y sus partes
 let songList = [];
 let currentSong = null;
 let isNew = false;
@@ -44,8 +47,9 @@ let acordesArriba = {};
 let rasgueoArr = [];
 let currentInstrument = "guitarra";
 let lastSavedData = "";
+let showLyricsInTab = false;
 
-// DOM Elements (completa esta parte con tus ids en HTML)
+// DOM ELEMENTS
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -76,17 +80,31 @@ const loginEmail = document.getElementById("login-email");
 const loginPass = document.getElementById("login-pass");
 const doLoginBtn = document.getElementById("do-login-btn");
 const loginError = document.getElementById("login-error");
+// Tablatura lyrics toggle
+const toggleLyricsBtn = document.getElementById("toggle-lyrics");
 
 // Ensayo en vivo:
 const rehearsalBtn = document.getElementById("rehearsal-btn");
 const rehearsalModal = document.getElementById("rehearsal-modal");
-const rehearsalBox = document.getElementById("rehearsal-box");
 const rehearsalArea = document.getElementById("rehearsal-area");
 const rehearsalModeSel = document.getElementById("rehearsal-mode");
 const rehearsalSpeedInput = document.getElementById("rehearsal-speed");
 const rehearsalSpeedLabel = document.getElementById("rehearsal-speed-label");
 const startRehearsalBtn = document.getElementById("start-rehearsal");
 const stopRehearsalBtn = document.getElementById("stop-rehearsal");
+
+// Helpers para arrays/objetos para firestore
+function serializeTab(tabMatriz) {
+  const obj = {};
+  for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
+  return obj;
+}
+function deserializeTab(tabObj) {
+  if (Array.isArray(tabObj)) return tabObj;
+  if (!tabObj) return [];
+  return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
+}
+// --- AUTENTICACIÓN Y PERMISOS ---
 function updateAuthUI() {
   if (isAdmin) {
     authUserSpan.textContent = "Editor: " + currentUser.email;
@@ -108,7 +126,7 @@ function updateAuthUI() {
 function enableEditor(edit) {
   [
     songTitleInput, letraInput, instrumentoSel, audioUpload,
-    addColBtn, delColBtn, addArrBtn, delArrBtn, saveBtn, cancelBtn
+    addColBtn, delColBtn, addArrBtn, delArrBtn, saveBtn, cancelBtn, toggleLyricsBtn
   ].forEach(el=> el.disabled = !edit);
   if (edit) {
     document.querySelectorAll(".arreglo-btn").forEach(b=>b.disabled=false);
@@ -118,6 +136,8 @@ function enableEditor(edit) {
     letraDiv.classList.add("readonly");
   }
 }
+
+// --- UI: LOGIN/LOGOUT/MODAL ---
 loginBtn.onclick = ()=>{
   loginError.textContent = "";
   loginEmail.value = "";
@@ -145,22 +165,26 @@ onAuthStateChanged(auth, user=>{
   isAdmin = (user && user.email===ADMIN_EMAIL);
   updateAuthUI();
 });
-function serializeTab(tabMatriz) {
-  const obj = {};
-  for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
-  return obj;
-}
-function deserializeTab(tabObj) {
-  if (Array.isArray(tabObj)) return tabObj;
-  if (!tabObj) return [];
-  return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
-}
 
+// --- RESPONSIVE CORRECCIONES ---
+window.addEventListener('resize', ()=>{
+  // Opcional: adaptar tamaño de SVG o contenedores si es necesario
+});
+// --- CRUD FIRESTORE, LISTA Y CARGA DE CANCIÓN ---
+
+// Sincroniza en tiempo real todas las canciones
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
   renderSongList();
+  // Si había una canción seleccionada, recargar sus datos
+  if (currentSong) {
+    let refreshed = songList.find(s=>s.id===currentSong.id);
+    if (refreshed) fillFormFromSong(refreshed);
+  }
 });
+
+// Renderiza lista en el sidebar
 function renderSongList() {
   songListElem.innerHTML = "";
   songList.sort((a,b)=>a.titulo.localeCompare(b.titulo));
@@ -172,11 +196,15 @@ function renderSongList() {
     songListElem.appendChild(li);
   }
 }
+
+// Selecciona y carga una canción por su ID
 function selectSong(id) {
   currentSong = songList.find(s=>s.id===id);
   isNew = false;
   fillFormFromSong(currentSong);
 }
+
+// Limpia y resetea el editor (para canción nueva)
 function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
@@ -187,7 +215,7 @@ function clearEditor() {
   Object.keys(INSTRUMENTS).forEach(instr=>{
     arreglos.forEach(ar=>{
       let key = `${instr}_${ar}`;
-      tabData[key] = createEmptyTab(instr, DEFAULT_BEATS);
+      tabData[key] = createEmptyTab(instr, 8);
     });
   });
   letraOriginal = "";
@@ -200,6 +228,8 @@ function clearEditor() {
   renderLetraEditor();
   renderRasgueoEditor();
 }
+
+// Llena el editor a partir de la canción seleccionada
 function fillFormFromSong(song) {
   if(!song) return;
   songTitleInput.value = song.titulo || "";
@@ -212,12 +242,12 @@ function fillFormFromSong(song) {
   if(song.tablatura) {
     for(const ar of arreglos) {
       let key = `${currentInstrument}_${ar}`;
-      tabData[key] = song.tablatura[ar] ? deserializeTab(song.tablatura[ar]) : createEmptyTab(currentInstrument, DEFAULT_BEATS);
+      tabData[key] = song.tablatura[ar] ? deserializeTab(song.tablatura[ar]) : createEmptyTab(currentInstrument, 8);
     }
   } else {
     for(const ar of arreglos) {
       let key = `${currentInstrument}_${ar}`;
-      tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+      tabData[key] = createEmptyTab(currentInstrument, 8);
     }
   }
   letraOriginal = song.letra || "";
@@ -230,10 +260,13 @@ function fillFormFromSong(song) {
   renderLetraEditor();
   renderRasgueoEditor();
 }
+
+// Crea una tablatura vacía para el instrumento y beats especificados
 function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr].strings;
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
+// ---- ARREGLOS: añadir, eliminar, cambiar ----
 function renderArreglosBtns() {
   arreglosList.innerHTML = "";
   arreglos.forEach(ar=>{
@@ -256,7 +289,7 @@ addArrBtn.onclick = ()=>{
   let nuevo = `arreglo ${next}`;
   arreglos.push(nuevo);
   let key = `${currentInstrument}_${nuevo}`;
-  tabData[key] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+  tabData[key] = createEmptyTab(currentInstrument, getTabCols());
   currentArreglo = nuevo;
   renderArreglosBtns();
   renderTablatureEditorSVG();
@@ -273,6 +306,11 @@ delArrBtn.onclick = ()=>{
   renderTablatureEditorSVG();
 };
 
+// --- AGREGAR/QUITAR TIEMPOS/COLUMNAS (trastes para guitarra) ---
+function getTabCols() {
+  // Guitarra: trastes, otros: tiempos
+  return (currentInstrument==="guitarra") ? INSTRUMENTS.guitarra.trastes : 8;
+}
 addColBtn.onclick = () => {
   if (!isAdmin) return;
   let t = tabData[`${currentInstrument}_${currentArreglo}`];
@@ -288,44 +326,88 @@ delColBtn.onclick = () => {
   }
 };
 
+// --- MOSTRAR/OCULTAR LETRA EN TABLATURA ---
+toggleLyricsBtn.onclick = () => {
+  showLyricsInTab = !showLyricsInTab;
+  renderTablatureEditorSVG();
+};
+
+// === RENDER TABLATURA SVG CON TRATES, CUERDAS Y LETRA INTEGRADA ===
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
   let t = tabData[`${currentInstrument}_${currentArreglo}`];
   if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
   const numStrings = t.length;
   const numBeats = t[0].length;
-  const width = 48 * numBeats + 10;
-  const height = 30 * (numStrings-1) + 30;
+  const width = 60 * (numBeats+1);
+  const height = 40 * (numStrings+2);
   let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", width);
   svg.setAttribute("height", height);
   svg.style.background = "#fafafc";
   svg.style.borderRadius = "10px";
   svg.style.boxShadow = "0 2px 10px #0001";
+  svg.style.maxWidth = "100%";
+
+  // Numeración de trastes/tiempos (top)
+  for (let b = 0; b < numBeats; b++) {
+    let x = 45 + b*60;
+    let topText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    topText.setAttribute("x", x);
+    topText.setAttribute("y", 20);
+    topText.setAttribute("text-anchor", "middle");
+    topText.setAttribute("fill", "#9e7e2c");
+    topText.setAttribute("font-size", "14");
+    topText.setAttribute("font-weight", "bold");
+    if(currentInstrument==="guitarra")
+      topText.textContent = `t${b+1}`;
+    else
+      topText.textContent = (b+1);
+    svg.appendChild(topText);
+  }
+
+  // Numeración de cuerdas (izquierda)
   for (let s = 0; s < numStrings; s++) {
-    let y = 15 + s*30;
+    let y = 50 + s*40;
+    let numText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    numText.setAttribute("x", 15);
+    numText.setAttribute("y", y+5);
+    numText.setAttribute("fill", "#2c3559");
+    numText.setAttribute("font-size", "15");
+    numText.setAttribute("font-weight", "bold");
+    numText.textContent = `${s+1}`;
+    svg.appendChild(numText);
+  }
+
+  // Líneas de cuerdas (horizontal)
+  for (let s = 0; s < numStrings; s++) {
+    let y = 50 + s*40;
     let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-    line.setAttribute("x1", 0);
+    line.setAttribute("x1", 35);
     line.setAttribute("y1", y);
-    line.setAttribute("x2", width);
+    line.setAttribute("x2", width-10);
     line.setAttribute("y2", y);
-    line.setAttribute("stroke", "#bbb");
+    line.setAttribute("stroke", "#b9b5d0");
     line.setAttribute("stroke-width", "2");
     svg.appendChild(line);
   }
+
+  // Líneas de trastes/tiempos (vertical)
   for (let b = 0; b < numBeats; b++) {
-    let x = 24 + b*48;
+    let x = 45 + b*60;
     let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
     vline.setAttribute("x1", x);
-    vline.setAttribute("y1", 10);
+    vline.setAttribute("y1", 50);
     vline.setAttribute("x2", x);
-    vline.setAttribute("y2", height-10);
+    vline.setAttribute("y2", height-35);
     vline.setAttribute("stroke", "#e0deee");
-    vline.setAttribute("stroke-width", "1");
+    vline.setAttribute("stroke-width", "1.6");
     svg.appendChild(vline);
   }
+
+  // NOTAS (editor ágil: click para poner/quitar nota, doble click trino)
   for (let s = 0; s < numStrings; s++) {
-    let y = 15 + s*30;
+    let y = 50 + s*40;
     for (let b = 0; b < numBeats; b++) {
       let valObj = t[s][b];
       let val = "", trino = false;
@@ -335,71 +417,73 @@ function renderTablatureEditorSVG() {
       } else {
         val = valObj;
       }
+      let x = 45 + b*60;
       if(val) {
-        let x = 24 + b*48;
         let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
         g.style.cursor = isAdmin?"pointer":"default";
         let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", x);
         circle.setAttribute("cy", y);
-        circle.setAttribute("r", 13);
+        circle.setAttribute("r", 15);
         circle.setAttribute("fill", "#3b306c");
         circle.setAttribute("stroke", "#e7e5f1");
         circle.setAttribute("stroke-width", "2");
         g.appendChild(circle);
         let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
         txt.setAttribute("x", x);
-        txt.setAttribute("y", y+5);
+        txt.setAttribute("y", y+6);
         txt.setAttribute("text-anchor", "middle");
         txt.setAttribute("fill", "#fff");
-        txt.setAttribute("font-size", "17");
+        txt.setAttribute("font-size", "18");
         txt.setAttribute("font-weight", "bold");
         txt.textContent = val;
         g.appendChild(txt);
         if(trino) {
           let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
           trinoTxt.setAttribute("x", x);
-          trinoTxt.setAttribute("y", y-18);
+          trinoTxt.setAttribute("y", y-20);
           trinoTxt.setAttribute("text-anchor", "middle");
           trinoTxt.setAttribute("fill", "#e39d1b");
-          trinoTxt.setAttribute("font-size", "18");
+          trinoTxt.setAttribute("font-size", "16");
           trinoTxt.setAttribute("font-weight", "bold");
           trinoTxt.textContent = "tr~";
           g.appendChild(trinoTxt);
         }
+        // Edición rápida: click para editar/quitar, doble click para trino
         if(isAdmin) {
           g.onclick = (e) => {
             e.stopPropagation();
-            let actualObj = t[s][b];
-            let prevVal = (typeof actualObj === "object" && actualObj) ? actualObj.val : actualObj;
-            let prevTrino = (typeof actualObj === "object" && actualObj) ? actualObj.trino : false;
-            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", prevVal);
+            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", val||"");
             if(nuevo!==null && nuevo!=="") {
-              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-              t[s][b] =               t[s][b] = {val: nuevo, trino:setTrino};
+              t[s][b] = {val: nuevo, trino: trino};
             } else {
               t[s][b] = "";
             }
             renderTablatureEditorSVG();
           };
+          g.ondblclick = (e) => {
+            e.stopPropagation();
+            if(typeof t[s][b] === "object" && t[s][b]) t[s][b].trino = !t[s][b].trino;
+            else if(val) t[s][b] = {val: val, trino: true};
+            renderTablatureEditorSVG();
+          };
         }
         svg.appendChild(g);
       } else {
-        let x = 24 + b*48;
+        // Celdas clickables para agregar nota
         let clickArea = document.createElementNS("http://www.w3.org/2000/svg","rect");
-        clickArea.setAttribute("x", x-13);
-        clickArea.setAttribute("y", y-13);
-        clickArea.setAttribute("width", 26);
-        clickArea.setAttribute("height", 26);
+        clickArea.setAttribute("x", x-18);
+        clickArea.setAttribute("y", y-18);
+        clickArea.setAttribute("width", 36);
+        clickArea.setAttribute("height", 36);
         clickArea.setAttribute("fill", "rgba(255,255,255,0)");
         clickArea.style.cursor = isAdmin?"pointer":"default";
         if(isAdmin) {
           clickArea.onclick = (e) => {
             e.stopPropagation();
-            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
+            let nuevo = prompt("Número de dedo/traste:", "");
             if(nuevo!==null && nuevo!=="") {
-              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-              t[s][b] = {val: nuevo, trino:setTrino};
+              t[s][b] = {val: nuevo, trino:false};
             }
             renderTablatureEditorSVG();
           };
@@ -408,9 +492,30 @@ function renderTablatureEditorSVG() {
       }
     }
   }
+
+  // LETRA INTEGRADA BAJO TABLATURA (opcional)
+  if (showLyricsInTab && letraOriginal && numBeats>0) {
+    let letraRow = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    let chunkPorCol = Math.max(1, Math.floor(letraOriginal.length/numBeats));
+    let lIdx = 0;
+    for(let b=0; b<numBeats; b++) {
+      let x = 45 + b*60;
+      let letraTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      letraTxt.setAttribute("x", x);
+      letraTxt.setAttribute("y", height-15);
+      letraTxt.setAttribute("text-anchor", "middle");
+      letraTxt.setAttribute("fill", "#3b306c");
+      letraTxt.setAttribute("font-size", "15");
+      letraTxt.setAttribute("font-family", "Menlo, monospace");
+      letraTxt.textContent = letraOriginal.substr(lIdx, chunkPorCol);
+      lIdx += chunkPorCol;
+      letraRow.appendChild(letraTxt);
+    }
+    svg.appendChild(letraRow);
+  }
   tablaturaDiv.appendChild(svg);
 }
-
+// LETRA Y ACORDES
 function renderLetraEditor(karaokeIdx = -1) {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -449,6 +554,7 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
+// RASGUEO (SOLO GUITARRA)
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -461,11 +567,7 @@ function renderRasgueoEditor() {
   rasgueoArr.forEach((r, idx) => {
     let icon = document.createElement("span");
     icon.className = "rasgueo-icon";
-    if (r.type==="bajo") {
-      icon = document.createElement("span");
-      icon.className = "rasgueo-bajo rasgueo-icon";
-      icon.textContent = "B";
-    }
+    if (r.type==="bajo") icon = Object.assign(document.createElement("span"), {className:"rasgueo-bajo rasgueo-icon",textContent:"B"});
     else if (r.type==="flecha-chica-abajo") icon.innerHTML = `<span style="font-size:1.1em;opacity:.5;">&#8595;</span>`;
     else if (r.type==="flecha-chica-arriba") icon.innerHTML = `<span style="font-size:1.1em;opacity:.5;">&#8593;</span>`;
     else if (r.type==="flecha-arriba") icon.innerHTML = `<span style="font-size:1.5em;">&#8593;</span>`;
@@ -571,7 +673,7 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 
-// AUTOGUARDADO
+// AUTOGUARDADO (cada 15s)
 function getCurrentSongData() {
   const tablaturaObj = {};
   for(const ar of arreglos) {
@@ -602,11 +704,9 @@ setInterval(async ()=>{
   }
 }, 15000);
 
-// PDF export estético
+// PDF EXPORT (profesional, adaptado para impresión)
 pdfBtn.onclick = ()=>{
-  // Clona la sección, la limpia y la ajusta antes de exportar para PDF bonito
   let node = document.getElementById("song-editor-section").cloneNode(true);
-  // Borra botones, barras, controles no relevantes
   Array.from(node.querySelectorAll('button, input[type="file"], #last-saved, #toast, .editor-group>h3')).forEach(e=>e.remove());
   Array.from(node.querySelectorAll('textarea, select')).forEach(e=>{
     let span = document.createElement("div");
@@ -661,7 +761,6 @@ function startKaraoke(speed=1) {
   if (!letraOriginal) { rehearsalArea.textContent="No hay letra."; return; }
   let chunks = [];
   rehearsalArea.innerHTML = "";
-  // Creamos los spans igual que en renderLetraEditor pero con karaoke-active en movimiento
   for (let i=0;i<letraOriginal.length;i++) {
     const span = document.createElement("span");
     span.className = "lyric-chunk";
@@ -682,7 +781,6 @@ function startKaraoke(speed=1) {
     if (idx > 0) chunks[idx-1].classList.remove("karaoke-active");
     if (idx < chunks.length) {
       chunks[idx].classList.add("karaoke-active");
-      // Si el span no está visible, hacemos scroll
       let rect = chunks[idx].getBoundingClientRect();
       let areaRect = rehearsalArea.getBoundingClientRect();
       if (rect.bottom > areaRect.bottom || rect.top < areaRect.top)
@@ -703,8 +801,8 @@ function startTablatureScroll(speed=1) {
   if (!t) { rehearsalArea.textContent="No hay tablatura."; return; }
   const numStrings = t.length;
   const numBeats = t[0].length;
-  const width = 48 * numBeats + 10;
-  const height = 30 * (numStrings-1) + 30;
+  const width = 60 * (numBeats+1);
+  const height = 40 * (numStrings+2);
   let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", width);
   svg.setAttribute("height", height+40);
@@ -712,40 +810,37 @@ function startTablatureScroll(speed=1) {
   svg.style.borderRadius = "10px";
   svg.style.boxShadow = "0 2px 10px #0001";
   for (let s = 0; s < numStrings; s++) {
-    let y = 15 + s*30;
+    let y = 50 + s*40;
     let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-    line.setAttribute("x1", 0);
+    line.setAttribute("x1", 35);
     line.setAttribute("y1", y);
-    line.setAttribute("x2", width);
+    line.setAttribute("x2", width-10);
     line.setAttribute("y2", y);
-    line.setAttribute("stroke", "#bbb");
+    line.setAttribute("stroke", "#b9b5d0");
     line.setAttribute("stroke-width", "2");
     svg.appendChild(line);
   }
-  // vertical lines
   for (let b = 0; b < numBeats; b++) {
-    let x = 24 + b*48;
+    let x = 45 + b*60;
     let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
     vline.setAttribute("x1", x);
-    vline.setAttribute("y1", 10);
+    vline.setAttribute("y1", 50);
     vline.setAttribute("x2", x);
-    vline.setAttribute("y2", height-10);
+    vline.setAttribute("y2", height-35);
     vline.setAttribute("stroke", "#e0deee");
-    vline.setAttribute("stroke-width", "1");
+    vline.setAttribute("stroke-width", "1.6");
     svg.appendChild(vline);
   }
-  // markers que se animan
   let beatMarkers = [];
   for (let b=0; b<numBeats; b++) {
-    let x = 24 + b*48;
+    let x = 45 + b*60;
     let marker = document.createElementNS("http://www.w3.org/2000/svg","rect");
-    marker.setAttribute("x", x-18); marker.setAttribute("y", 0);
-    marker.setAttribute("width", 36); marker.setAttribute("height", height+15);
+    marker.setAttribute("x", x-24); marker.setAttribute("y", 40);
+    marker.setAttribute("width", 48); marker.setAttribute("height", height-55);
     marker.setAttribute("fill", "#ffe082");
     marker.setAttribute("opacity", "0");
     svg.appendChild(marker);
     beatMarkers.push(marker);
-    // Círculos y números
     for (let s=0;s<numStrings;s++) {
       let valObj = t[s][b];
       let val = "", trino = false;
@@ -753,32 +848,32 @@ function startTablatureScroll(speed=1) {
         val = valObj.val; trino = !!valObj.trino;
       } else val = valObj;
       if(val) {
-        let y = 15 + s*30;
+        let y = 50 + s*40;
         let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
         let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", x);
         circle.setAttribute("cy", y);
-        circle.setAttribute("r", 13);
+        circle.setAttribute("r", 15);
         circle.setAttribute("fill", "#3b306c");
         circle.setAttribute("stroke", "#e7e5f1");
         circle.setAttribute("stroke-width", "2");
         g.appendChild(circle);
         let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
         txt.setAttribute("x", x);
-        txt.setAttribute("y", y+5);
+        txt.setAttribute("y", y+6);
         txt.setAttribute("text-anchor", "middle");
         txt.setAttribute("fill", "#fff");
-        txt.setAttribute("font-size", "17");
+        txt.setAttribute("font-size", "18");
         txt.setAttribute("font-weight", "bold");
         txt.textContent = val;
         g.appendChild(txt);
         if(trino) {
           let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
           trinoTxt.setAttribute("x", x);
-          trinoTxt.setAttribute("y", y-18);
+          trinoTxt.setAttribute("y", y-20);
           trinoTxt.setAttribute("text-anchor", "middle");
           trinoTxt.setAttribute("fill", "#e39d1b");
-          trinoTxt.setAttribute("font-size", "18");
+          trinoTxt.setAttribute("font-size", "16");
           trinoTxt.setAttribute("font-weight", "bold");
           trinoTxt.textContent = "tr~";
           g.appendChild(trinoTxt);
@@ -788,14 +883,13 @@ function startTablatureScroll(speed=1) {
     }
   }
   rehearsalArea.appendChild(svg);
-  // Animación
   let idx=0;
   function nextBeat() {
     if (!rehearsalRunning) return;
     if (idx>0) beatMarkers[idx-1].setAttribute("opacity","0");
     if (idx<numBeats) {
       beatMarkers[idx].setAttribute("opacity","0.34");
-      svg.scrollLeft = Math.max(0, 24+idx*48-150);
+      svg.scrollLeft = Math.max(0, 45+idx*60-150);
       idx++;
       rehearsalTimeout = setTimeout(nextBeat, 350/speed);
     } else {
@@ -826,7 +920,6 @@ function startAudioKaraokeSync(speed=1) {
     rehearsalArea.appendChild(span);
     chunks.push(span);
   }
-  // "Fake" sync: reparte la duración del audio entre todos los chunks
   const audio = new Audio(audioPlayer.src);
   rehearsalAudioObj = audio;
   let duration = 0;
@@ -866,10 +959,12 @@ function stopRehearsal() {
   rehearsalModal.style.display = "none";
   karaokeCurrent = -1;
 }
+// TOAST (notificaciones rápidas)
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("visible");
   setTimeout(()=>toast.classList.remove("visible"), 1700);
 }
-clearEditor();
 
+// --- ARRANQUE: inicializa editor vacío en primera carga
+clearEditor();
