@@ -18,12 +18,10 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// --- ROLES Y ESTADO GLOBAL ---
 const ADMIN_EMAIL = "edis.ugto@gmail.com";
 let isAdmin = false;
 let currentUser = null;
 
-// Instrumentos y especificaciones (nomenclatura estándar, cuerdas, trastes para guitarra)
 const INSTRUMENTS = {
   guitarra: { name: "Guitarra", strings: 6, trastes: 12 },
   laud: { name: "Laúd", strings: 6 },
@@ -33,9 +31,8 @@ const INSTRUMENTS = {
   guitarron: { name: "Guitarrón", strings: 6 }
 };
 const DEFAULT_ARREGLOS = ["arreglo 1"];
-const DEFAULT_TRATES = 12; // Guitarra usa trastes
+const DEFAULT_TRATES = 12;
 
-// Estado de canción actual y sus partes
 let songList = [];
 let currentSong = null;
 let isNew = false;
@@ -49,7 +46,6 @@ let currentInstrument = "guitarra";
 let lastSavedData = "";
 let showLyricsInTab = false;
 
-// DOM ELEMENTS
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -80,10 +76,7 @@ const loginEmail = document.getElementById("login-email");
 const loginPass = document.getElementById("login-pass");
 const doLoginBtn = document.getElementById("do-login-btn");
 const loginError = document.getElementById("login-error");
-// Tablatura lyrics toggle
 const toggleLyricsBtn = document.getElementById("toggle-lyrics");
-
-// Ensayo en vivo:
 const rehearsalBtn = document.getElementById("rehearsal-btn");
 const rehearsalModal = document.getElementById("rehearsal-modal");
 const rehearsalArea = document.getElementById("rehearsal-area");
@@ -93,7 +86,6 @@ const rehearsalSpeedLabel = document.getElementById("rehearsal-speed-label");
 const startRehearsalBtn = document.getElementById("start-rehearsal");
 const stopRehearsalBtn = document.getElementById("stop-rehearsal");
 
-// Helpers para arrays/objetos para firestore
 function serializeTab(tabMatriz) {
   const obj = {};
   for(let i=0; i<tabMatriz.length; i++) obj[i] = tabMatriz[i];
@@ -104,6 +96,7 @@ function deserializeTab(tabObj) {
   if (!tabObj) return [];
   return Object.keys(tabObj).sort((a,b)=>a-b).map(k => tabObj[k]);
 }
+
 // --- AUTENTICACIÓN Y PERMISOS ---
 function updateAuthUI() {
   if (isAdmin) {
@@ -136,8 +129,6 @@ function enableEditor(edit) {
     letraDiv.classList.add("readonly");
   }
 }
-
-// --- UI: LOGIN/LOGOUT/MODAL ---
 loginBtn.onclick = ()=>{
   loginError.textContent = "";
   loginEmail.value = "";
@@ -166,25 +157,16 @@ onAuthStateChanged(auth, user=>{
   updateAuthUI();
 });
 
-// --- RESPONSIVE CORRECCIONES ---
-window.addEventListener('resize', ()=>{
-  // Opcional: adaptar tamaño de SVG o contenedores si es necesario
-});
 // --- CRUD FIRESTORE, LISTA Y CARGA DE CANCIÓN ---
-
-// Sincroniza en tiempo real todas las canciones
 onSnapshot(collection(db, "canciones"), (snap) => {
   songList = [];
   snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
   renderSongList();
-  // Si había una canción seleccionada, recargar sus datos
   if (currentSong) {
     let refreshed = songList.find(s=>s.id===currentSong.id);
     if (refreshed) fillFormFromSong(refreshed);
   }
 });
-
-// Renderiza lista en el sidebar
 function renderSongList() {
   songListElem.innerHTML = "";
   songList.sort((a,b)=>a.titulo.localeCompare(b.titulo));
@@ -196,19 +178,16 @@ function renderSongList() {
     songListElem.appendChild(li);
   }
 }
-
-// Selecciona y carga una canción por su ID
 function selectSong(id) {
   currentSong = songList.find(s=>s.id===id);
   isNew = false;
   fillFormFromSong(currentSong);
 }
-
-// Limpia y resetea el editor (para canción nueva)
 function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
   instrumentoSel.value = "guitarra";
+  currentInstrument = "guitarra";
   arreglos = [...DEFAULT_ARREGLOS];
   currentArreglo = arreglos[0];
   tabData = {};
@@ -228,8 +207,6 @@ function clearEditor() {
   renderLetraEditor();
   renderRasgueoEditor();
 }
-
-// Llena el editor a partir de la canción seleccionada
 function fillFormFromSong(song) {
   if(!song) return;
   songTitleInput.value = song.titulo || "";
@@ -260,13 +237,38 @@ function fillFormFromSong(song) {
   renderLetraEditor();
   renderRasgueoEditor();
 }
-
-// Crea una tablatura vacía para el instrumento y beats especificados
 function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr].strings;
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-// ---- ARREGLOS: añadir, eliminar, cambiar ----
+function getTabCols() {
+  return (currentInstrument==="guitarra") ? INSTRUMENTS.guitarra.trastes : 8;
+}
+
+// === CAMBIO DE INSTRUMENTO (FIX REACTIVO Y ROBUSTO) ===
+instrumentoSel.onchange = function () {
+  const newInstr = instrumentoSel.value;
+  if (currentInstrument === newInstr) return;
+  currentInstrument = newInstr;
+
+  // Si no es guitarra, limpia el rasgueo (solo guitarra lo usa)
+  if (newInstr !== "guitarra") rasgueoArr = [];
+
+  // Actualiza tabData para todos los arreglos activos de este instrumento
+  const newTabData = {};
+  arreglos.forEach(ar => {
+    let key = `${newInstr}_${ar}`;
+    // Si ya hay una tabla para este arreglo/instrumento, la conserva
+    newTabData[key] = tabData[key] || createEmptyTab(newInstr, getTabCols());
+  });
+  tabData = newTabData;
+
+  renderArreglosBtns();
+  renderTablatureEditorSVG();
+  renderRasgueoEditor();
+};
+// === FIN FIX CAMBIO INSTRUMENTO ===
+
 function renderArreglosBtns() {
   arreglosList.innerHTML = "";
   arreglos.forEach(ar=>{
@@ -305,12 +307,6 @@ delArrBtn.onclick = ()=>{
   renderArreglosBtns();
   renderTablatureEditorSVG();
 };
-
-// --- AGREGAR/QUITAR TIEMPOS/COLUMNAS (trastes para guitarra) ---
-function getTabCols() {
-  // Guitarra: trastes, otros: tiempos
-  return (currentInstrument==="guitarra") ? INSTRUMENTS.guitarra.trastes : 8;
-}
 addColBtn.onclick = () => {
   if (!isAdmin) return;
   let t = tabData[`${currentInstrument}_${currentArreglo}`];
@@ -325,197 +321,11 @@ delColBtn.onclick = () => {
     renderTablatureEditorSVG();
   }
 };
-
-// --- MOSTRAR/OCULTAR LETRA EN TABLATURA ---
 toggleLyricsBtn.onclick = () => {
   showLyricsInTab = !showLyricsInTab;
   renderTablatureEditorSVG();
 };
 
-// === RENDER TABLATURA SVG CON TRATES, CUERDAS Y LETRA INTEGRADA ===
-function renderTablatureEditorSVG() {
-  tablaturaDiv.innerHTML = "";
-  let t = tabData[`${currentInstrument}_${currentArreglo}`];
-  if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
-  const numStrings = t.length;
-  const numBeats = t[0].length;
-  const width = 60 * (numBeats+1);
-  const height = 40 * (numStrings+2);
-  let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height);
-  svg.style.background = "#fafafc";
-  svg.style.borderRadius = "10px";
-  svg.style.boxShadow = "0 2px 10px #0001";
-  svg.style.maxWidth = "100%";
-
-  // Numeración de trastes/tiempos (top)
-  for (let b = 0; b < numBeats; b++) {
-    let x = 45 + b*60;
-    let topText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    topText.setAttribute("x", x);
-    topText.setAttribute("y", 20);
-    topText.setAttribute("text-anchor", "middle");
-    topText.setAttribute("fill", "#9e7e2c");
-    topText.setAttribute("font-size", "14");
-    topText.setAttribute("font-weight", "bold");
-    if(currentInstrument==="guitarra")
-      topText.textContent = `t${b+1}`;
-    else
-      topText.textContent = (b+1);
-    svg.appendChild(topText);
-  }
-
-  // Numeración de cuerdas (izquierda)
-  for (let s = 0; s < numStrings; s++) {
-    let y = 50 + s*40;
-    let numText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    numText.setAttribute("x", 15);
-    numText.setAttribute("y", y+5);
-    numText.setAttribute("fill", "#2c3559");
-    numText.setAttribute("font-size", "15");
-    numText.setAttribute("font-weight", "bold");
-    numText.textContent = `${s+1}`;
-    svg.appendChild(numText);
-  }
-
-  // Líneas de cuerdas (horizontal)
-  for (let s = 0; s < numStrings; s++) {
-    let y = 50 + s*40;
-    let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-    line.setAttribute("x1", 35);
-    line.setAttribute("y1", y);
-    line.setAttribute("x2", width-10);
-    line.setAttribute("y2", y);
-    line.setAttribute("stroke", "#b9b5d0");
-    line.setAttribute("stroke-width", "2");
-    svg.appendChild(line);
-  }
-
-  // Líneas de trastes/tiempos (vertical)
-  for (let b = 0; b < numBeats; b++) {
-    let x = 45 + b*60;
-    let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
-    vline.setAttribute("x1", x);
-    vline.setAttribute("y1", 50);
-    vline.setAttribute("x2", x);
-    vline.setAttribute("y2", height-35);
-    vline.setAttribute("stroke", "#e0deee");
-    vline.setAttribute("stroke-width", "1.6");
-    svg.appendChild(vline);
-  }
-
-  // NOTAS (editor ágil: click para poner/quitar nota, doble click trino)
-  for (let s = 0; s < numStrings; s++) {
-    let y = 50 + s*40;
-    for (let b = 0; b < numBeats; b++) {
-      let valObj = t[s][b];
-      let val = "", trino = false;
-      if(typeof valObj === "object" && valObj) {
-        val = valObj.val;
-        trino = !!valObj.trino;
-      } else {
-        val = valObj;
-      }
-      let x = 45 + b*60;
-      if(val) {
-        let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        g.style.cursor = isAdmin?"pointer":"default";
-        let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", x);
-        circle.setAttribute("cy", y);
-        circle.setAttribute("r", 15);
-        circle.setAttribute("fill", "#3b306c");
-        circle.setAttribute("stroke", "#e7e5f1");
-        circle.setAttribute("stroke-width", "2");
-        g.appendChild(circle);
-        let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        txt.setAttribute("x", x);
-        txt.setAttribute("y", y+6);
-        txt.setAttribute("text-anchor", "middle");
-        txt.setAttribute("fill", "#fff");
-        txt.setAttribute("font-size", "18");
-        txt.setAttribute("font-weight", "bold");
-        txt.textContent = val;
-        g.appendChild(txt);
-        if(trino) {
-          let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          trinoTxt.setAttribute("x", x);
-          trinoTxt.setAttribute("y", y-20);
-          trinoTxt.setAttribute("text-anchor", "middle");
-          trinoTxt.setAttribute("fill", "#e39d1b");
-          trinoTxt.setAttribute("font-size", "16");
-          trinoTxt.setAttribute("font-weight", "bold");
-          trinoTxt.textContent = "tr~";
-          g.appendChild(trinoTxt);
-        }
-        // Edición rápida: click para editar/quitar, doble click para trino
-        if(isAdmin) {
-          g.onclick = (e) => {
-            e.stopPropagation();
-            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", val||"");
-            if(nuevo!==null && nuevo!=="") {
-              t[s][b] = {val: nuevo, trino: trino};
-            } else {
-              t[s][b] = "";
-            }
-            renderTablatureEditorSVG();
-          };
-          g.ondblclick = (e) => {
-            e.stopPropagation();
-            if(typeof t[s][b] === "object" && t[s][b]) t[s][b].trino = !t[s][b].trino;
-            else if(val) t[s][b] = {val: val, trino: true};
-            renderTablatureEditorSVG();
-          };
-        }
-        svg.appendChild(g);
-      } else {
-        // Celdas clickables para agregar nota
-        let clickArea = document.createElementNS("http://www.w3.org/2000/svg","rect");
-        clickArea.setAttribute("x", x-18);
-        clickArea.setAttribute("y", y-18);
-        clickArea.setAttribute("width", 36);
-        clickArea.setAttribute("height", 36);
-        clickArea.setAttribute("fill", "rgba(255,255,255,0)");
-        clickArea.style.cursor = isAdmin?"pointer":"default";
-        if(isAdmin) {
-          clickArea.onclick = (e) => {
-            e.stopPropagation();
-            let nuevo = prompt("Número de dedo/traste:", "");
-            if(nuevo!==null && nuevo!=="") {
-              t[s][b] = {val: nuevo, trino:false};
-            }
-            renderTablatureEditorSVG();
-          };
-        }
-        svg.appendChild(clickArea);
-      }
-    }
-  }
-
-  // LETRA INTEGRADA BAJO TABLATURA (opcional)
-  if (showLyricsInTab && letraOriginal && numBeats>0) {
-    let letraRow = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    let chunkPorCol = Math.max(1, Math.floor(letraOriginal.length/numBeats));
-    let lIdx = 0;
-    for(let b=0; b<numBeats; b++) {
-      let x = 45 + b*60;
-      let letraTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      letraTxt.setAttribute("x", x);
-      letraTxt.setAttribute("y", height-15);
-      letraTxt.setAttribute("text-anchor", "middle");
-      letraTxt.setAttribute("fill", "#3b306c");
-      letraTxt.setAttribute("font-size", "15");
-      letraTxt.setAttribute("font-family", "Menlo, monospace");
-      letraTxt.textContent = letraOriginal.substr(lIdx, chunkPorCol);
-      lIdx += chunkPorCol;
-      letraRow.appendChild(letraTxt);
-    }
-    svg.appendChild(letraRow);
-  }
-  tablaturaDiv.appendChild(svg);
-}
-// LETRA Y ACORDES
 function renderLetraEditor(karaokeIdx = -1) {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -554,7 +364,6 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
-// RASGUEO (SOLO GUITARRA)
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -589,382 +398,122 @@ function renderRasgueoEditor() {
   btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-arriba"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   btn = document.createElement("button");
-  btn.innerHTML = `<span style="font-size:1.1em;opacity:.6;">↓</span>`;
-  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-chica-abajo"}); renderRasgueoEditor(); };
-  controls.appendChild(btn);
-  btn = document.createElement("button");
-  btn.innerHTML = `<span style="font-size:1.1em;opacity:.6;">↑</span>`;
-  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"flecha-chica-arriba"}); renderRasgueoEditor(); };
-  controls.appendChild(btn);
-  let bbtn = document.createElement("button");
-  bbtn.innerHTML = "B";
-  bbtn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"bajo"}); renderRasgueoEditor(); };
-  controls.appendChild(bbtn);
-  btn = document.createElement("button");
-  btn.textContent = "X";
+  btn.innerHTML = "x";
   btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"muteo"}); renderRasgueoEditor(); };
+  controls.appendChild(btn);
+  btn = document.createElement("button");
+  btn.innerHTML = "B";
+  btn.onclick = (e)=>{e.preventDefault(); rasgueoArr.push({type:"bajo"}); renderRasgueoEditor(); };
   controls.appendChild(btn);
   rasgueoDiv.appendChild(controls);
 }
 
-// AUDIO
-audioUpload.onchange = function (e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  audioPlayer.src = url;
-  audioPlayer.style.display = "";
+function renderTablatureEditorSVG() {
+  const tab = tabData[`${currentInstrument}_${currentArreglo}`];
+  if (!tab) { tablaturaDiv.innerHTML = "(Sin datos de tablatura)"; return; }
+  const strings = INSTRUMENTS[currentInstrument].strings;
+  const cols = tab[0].length;
+  let html = `<div style="overflow-x:auto;"><svg width="${cols*44+60}" height="${strings*32+32}">
+    <g>`;
+  for (let s=0; s<strings; s++) {
+    html += `<line x1="40" y1="${s*32+24}" x2="${cols*44+40}" y2="${s*32+24}" stroke="#888" stroke-width="2"/>`;
+    html += `<text x="18" y="${s*32+30}" font-size="15" fill="#5534c4">S${s+1}</text>`;
+  }
+  for (let c=0; c<cols; c++) {
+    html += `<line x1="${c*44+40}" y1="24" x2="${c*44+40}" y2="${strings*32+24}" stroke="#bbb" stroke-width="1"/>`;
+  }
+  for (let s=0; s<strings; s++) {
+    for (let c=0; c<cols; c++) {
+      let val = tab[s][c];
+      html += `<text x="${c*44+60}" y="${s*32+44}" font-size="16" fill="#222" text-anchor="middle" style="cursor:pointer;" onclick="window.__editTabCell&&window.__editTabCell(${s},${c})">${val||''}</text>`;
+    }
+  }
+  html += `</g></svg></div>`;
+  tablaturaDiv.innerHTML = html;
+
+  window.__editTabCell = function(s,c){
+    if (!isAdmin) return;
+    let val = prompt("Número/fret/nota (vacío para borrar):", tab[s][c]||"");
+    tab[s][c] = (val||"").trim();
+    renderTablatureEditorSVG();
+  };
+}
+
+audioUpload.onchange = function(){
+  const file = audioUpload.files[0];
+  if(!file) return;
+  const refUp = ref(storage, 'audios/'+file.name);
+  uploadBytes(refUp, file).then(()=>getDownloadURL(refUp)).then(url=>{
+    audioPlayer.src = url;
+    audioPlayer.style.display = "";
+    showToast("Audio subido correctamente.");
+  });
 };
 
-// NUEVA CANCIÓN
-newSongBtn.onclick = () => {
-  if (!isAdmin) return;
+songForm.onsubmit = async function(e){
+  e.preventDefault();
+  if (!isAdmin) return false;
+  const titulo = songTitleInput.value.trim();
+  if (!titulo) return showToast("Pon un título");
+  const letra = letraInput.value;
+  const instrumento = instrumentoSel.value;
+  const arreglosToSave = [...arreglos];
+  const tablaturaToSave = {};
+  arreglosToSave.forEach(ar=>{
+    let key = `${instrumento}_${ar}`;
+    tablaturaToSave[ar] = serializeTab(tabData[key]);
+  });
+  let songData = {
+    titulo, letra, instrumento, arreglos: arreglosToSave,
+    tablatura: tablaturaToSave, acordesArriba, rasgueo: rasgueoArr,
+    audioUrl: audioPlayer.src || ""
+  };
+  if(isNew){
+    await addDoc(collection(db,"canciones"), songData);
+    showToast("Canción agregada.");
+    isNew = false;
+  } else {
+    await setDoc(doc(db,"canciones",currentSong.id), songData);
+    showToast("Canción guardada.");
+  }
+  lastSavedData = JSON.stringify(songData);
+  lastSavedDiv.textContent = "Última vez guardado: " + (new Date()).toLocaleString();
+  return false;
+};
+newSongBtn.onclick = ()=>{
   isNew = true;
   currentSong = null;
   clearEditor();
-  songTitleInput.focus();
+  showToast("Editor limpio, puedes crear una nueva canción.");
 };
-
-// CANCELAR
-cancelBtn.onclick = (e) => {
-  e.preventDefault();
-  if (songList.length && currentSong) fillFormFromSong(currentSong);
+cancelBtn.onclick = ()=>{
+  if (currentSong) fillFormFromSong(currentSong);
   else clearEditor();
 };
 
-// GUARDADO EN FIRESTORE
-songForm.onsubmit = async function(e) {
-  e.preventDefault();
-  if (!isAdmin) return;
-  let audioUrl = currentSong ? currentSong.audioUrl : "";
-  if (audioUpload.files[0]) {
-    showToast("Subiendo audio...");
-    const file = audioUpload.files[0];
-    const storageRef = ref(storage, "audios/"+songTitleInput.value+"-"+Date.now());
-    await uploadBytes(storageRef, file);
-    audioUrl = await getDownloadURL(storageRef);
-    audioPlayer.src = audioUrl;
-  }
-  // Serializa la tablatura según los arreglos
-  const tablaturaObj = {};
-  for(const ar of arreglos) {
-    tablaturaObj[ar] = serializeTab(tabData[`${currentInstrument}_${ar}`]);
-  }
-  const data = {
-    titulo: songTitleInput.value,
-    letra: letraInput.value,
-    instrumento: instrumentoSel.value,
-    arreglos: [...arreglos],
-    tablatura: tablaturaObj,
-    acordesArriba,
-    rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
-    audioUrl
-  };
-  if (isNew) {
-    const newRef = await addDoc(collection(db,"canciones"), data);
-    showToast("Canción agregada");
-    currentSong = {id:newRef.id,...data};
-    isNew = false;
-  } else if (currentSong) {
-    await setDoc(doc(db,"canciones",currentSong.id), data);
-    showToast("Canción actualizada");
-    currentSong = {...data, id:currentSong.id};
-  }
-  lastSavedData = JSON.stringify(data);
-};
-
-// AUTOGUARDADO (cada 15s)
-function getCurrentSongData() {
-  const tablaturaObj = {};
-  for(const ar of arreglos) {
-    tablaturaObj[ar] = serializeTab(tabData[`${currentInstrument}_${ar}`]);
-  }
-  return {
-    titulo: songTitleInput.value,
-    letra: letraInput.value,
-    instrumento: instrumentoSel.value,
-    arreglos: [...arreglos],
-    tablatura: tablaturaObj,
-    acordesArriba,
-    rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
-    audioUrl: currentSong ? currentSong.audioUrl : ""
-  };
-}
-setInterval(async ()=>{
-  if (!isAdmin) return;
-  const nowData = JSON.stringify(getCurrentSongData());
-  if (nowData !== lastSavedData && songTitleInput.value.trim()) {
-    let data = getCurrentSongData();
-    if (currentSong && currentSong.id) {
-      await setDoc(doc(db,"canciones",currentSong.id), data);
-      showToast("Autoguardado");
-    }
-    lastSavedData = nowData;
-    lastSavedDiv.textContent = "Autoguardado: "+(new Date()).toLocaleTimeString();
-  }
-}, 15000);
-
-// PDF EXPORT (profesional, adaptado para impresión)
-pdfBtn.onclick = ()=>{
-  let node = document.getElementById("song-editor-section").cloneNode(true);
-  Array.from(node.querySelectorAll('button, input[type="file"], #last-saved, #toast, .editor-group>h3')).forEach(e=>e.remove());
-  Array.from(node.querySelectorAll('textarea, select')).forEach(e=>{
-    let span = document.createElement("div");
-    span.textContent = e.value;
-    span.style.fontSize = "1.05em";
-    span.style.padding = "4px";
-    e.replaceWith(span);
-  });
-  html2pdf().set({
-    margin: 10,
-    filename: (songTitleInput.value||"cancion") + ".pdf",
-    jsPDF: {format: 'a4', orientation: 'portrait'},
-    image: { type: 'jpeg', quality: 0.99 }
-  }).from(node).save();
-};
-// === ENSAYO EN VIVO ===
-let rehearsalRunning = false, rehearsalTimeout = null, karaokeCurrent = -1;
-let rehearsalAudioObj = null;
-
-rehearsalBtn.onclick = ()=>{
-  rehearsalModal.style.display = "";
-  rehearsalArea.innerHTML = "";
-  rehearsalModeSel.value = "letra";
-  rehearsalSpeedInput.value = 1;
-  rehearsalSpeedLabel.textContent = "Normal";
-};
-stopRehearsalBtn.onclick = stopRehearsal;
-rehearsalModal.onclick = (e)=>{
-  if (e.target === rehearsalModal) stopRehearsal();
-};
-rehearsalSpeedInput.oninput = ()=>{
-  let v = Number(rehearsalSpeedInput.value);
-  if (v < 0.75) rehearsalSpeedLabel.textContent = "Lento";
-  else if (v < 1.1) rehearsalSpeedLabel.textContent = "Normal";
-  else rehearsalSpeedLabel.textContent = v+"x";
-};
-
-// START ENSAYO
-startRehearsalBtn.onclick = ()=>{
-  let mode = rehearsalModeSel.value;
-  let speed = Number(rehearsalSpeedInput.value);
-  stopRehearsal();
-  rehearsalArea.innerHTML = "";
-  if (mode==="letra") startKaraoke(speed);
-  else if (mode==="tablatura") startTablatureScroll(speed);
-  else if (mode==="sincronizar") startAudioKaraokeSync(speed);
-  rehearsalRunning = true;
-};
-
-// --- KARAOKE LETRA + ACORDES (scroll animado) ---
-function startKaraoke(speed=1) {
-  if (!letraOriginal) { rehearsalArea.textContent="No hay letra."; return; }
-  let chunks = [];
-  rehearsalArea.innerHTML = "";
-  for (let i=0;i<letraOriginal.length;i++) {
-    const span = document.createElement("span");
-    span.className = "lyric-chunk";
-    span.textContent = letraOriginal[i];
-    span.style.transition = "background 0.12s";
-    if (acordesArriba[i]) {
-      const chord = document.createElement("span");
-      chord.className = "chord-above";
-      chord.textContent = acordesArriba[i];
-      span.appendChild(chord);
-    }
-    rehearsalArea.appendChild(span);
-    chunks.push(span);
-  }
-  let idx = 0;
-  function next() {
-    if (!rehearsalRunning) return;
-    if (idx > 0) chunks[idx-1].classList.remove("karaoke-active");
-    if (idx < chunks.length) {
-      chunks[idx].classList.add("karaoke-active");
-      let rect = chunks[idx].getBoundingClientRect();
-      let areaRect = rehearsalArea.getBoundingClientRect();
-      if (rect.bottom > areaRect.bottom || rect.top < areaRect.top)
-        chunks[idx].scrollIntoView({behavior:'smooth', block:'center'});
-      idx++;
-      rehearsalTimeout = setTimeout(next, 200/speed); // ajusta velocidad aquí
-    } else {
-      rehearsalRunning = false;
-      rehearsalTimeout = null;
-    }
-  }
-  next();
-}
-
-// --- TABLATURA: scroll por beats (fácil de expandir) ---
-function startTablatureScroll(speed=1) {
-  let t = tabData[`${currentInstrument}_${currentArreglo}`];
-  if (!t) { rehearsalArea.textContent="No hay tablatura."; return; }
-  const numStrings = t.length;
-  const numBeats = t[0].length;
-  const width = 60 * (numBeats+1);
-  const height = 40 * (numStrings+2);
-  let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height+40);
-  svg.style.background = "#fafafc";
-  svg.style.borderRadius = "10px";
-  svg.style.boxShadow = "0 2px 10px #0001";
-  for (let s = 0; s < numStrings; s++) {
-    let y = 50 + s*40;
-    let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-    line.setAttribute("x1", 35);
-    line.setAttribute("y1", y);
-    line.setAttribute("x2", width-10);
-    line.setAttribute("y2", y);
-    line.setAttribute("stroke", "#b9b5d0");
-    line.setAttribute("stroke-width", "2");
-    svg.appendChild(line);
-  }
-  for (let b = 0; b < numBeats; b++) {
-    let x = 45 + b*60;
-    let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
-    vline.setAttribute("x1", x);
-    vline.setAttribute("y1", 50);
-    vline.setAttribute("x2", x);
-    vline.setAttribute("y2", height-35);
-    vline.setAttribute("stroke", "#e0deee");
-    vline.setAttribute("stroke-width", "1.6");
-    svg.appendChild(vline);
-  }
-  let beatMarkers = [];
-  for (let b=0; b<numBeats; b++) {
-    let x = 45 + b*60;
-    let marker = document.createElementNS("http://www.w3.org/2000/svg","rect");
-    marker.setAttribute("x", x-24); marker.setAttribute("y", 40);
-    marker.setAttribute("width", 48); marker.setAttribute("height", height-55);
-    marker.setAttribute("fill", "#ffe082");
-    marker.setAttribute("opacity", "0");
-    svg.appendChild(marker);
-    beatMarkers.push(marker);
-    for (let s=0;s<numStrings;s++) {
-      let valObj = t[s][b];
-      let val = "", trino = false;
-      if(typeof valObj === "object" && valObj) {
-        val = valObj.val; trino = !!valObj.trino;
-      } else val = valObj;
-      if(val) {
-        let y = 50 + s*40;
-        let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", x);
-        circle.setAttribute("cy", y);
-        circle.setAttribute("r", 15);
-        circle.setAttribute("fill", "#3b306c");
-        circle.setAttribute("stroke", "#e7e5f1");
-        circle.setAttribute("stroke-width", "2");
-        g.appendChild(circle);
-        let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        txt.setAttribute("x", x);
-        txt.setAttribute("y", y+6);
-        txt.setAttribute("text-anchor", "middle");
-        txt.setAttribute("fill", "#fff");
-        txt.setAttribute("font-size", "18");
-        txt.setAttribute("font-weight", "bold");
-        txt.textContent = val;
-        g.appendChild(txt);
-        if(trino) {
-          let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          trinoTxt.setAttribute("x", x);
-          trinoTxt.setAttribute("y", y-20);
-          trinoTxt.setAttribute("text-anchor", "middle");
-          trinoTxt.setAttribute("fill", "#e39d1b");
-          trinoTxt.setAttribute("font-size", "16");
-          trinoTxt.setAttribute("font-weight", "bold");
-          trinoTxt.textContent = "tr~";
-          g.appendChild(trinoTxt);
-        }
-        svg.appendChild(g);
-      }
-    }
-  }
-  rehearsalArea.appendChild(svg);
-  let idx=0;
-  function nextBeat() {
-    if (!rehearsalRunning) return;
-    if (idx>0) beatMarkers[idx-1].setAttribute("opacity","0");
-    if (idx<numBeats) {
-      beatMarkers[idx].setAttribute("opacity","0.34");
-      svg.scrollLeft = Math.max(0, 45+idx*60-150);
-      idx++;
-      rehearsalTimeout = setTimeout(nextBeat, 350/speed);
-    } else {
-      rehearsalRunning = false; rehearsalTimeout = null;
-    }
-  }
-  nextBeat();
-}
-
-// --- KARAOKE sincronizado con AUDIO ---
-function startAudioKaraokeSync(speed=1) {
-  if (!audioPlayer.src || audioPlayer.src==="" || audioPlayer.src.startsWith("blob:")) {
-    rehearsalArea.innerHTML = "<div style='color:#b00'>No hay audio cargado para esta canción.</div>"; return;
-  }
-  let chunks = [];
-  rehearsalArea.innerHTML = "";
-  for (let i=0;i<letraOriginal.length;i++) {
-    const span = document.createElement("span");
-    span.className = "lyric-chunk";
-    span.textContent = letraOriginal[i];
-    span.style.transition = "background 0.12s";
-    if (acordesArriba[i]) {
-      const chord = document.createElement("span");
-      chord.className = "chord-above";
-      chord.textContent = acordesArriba[i];
-      span.appendChild(chord);
-    }
-    rehearsalArea.appendChild(span);
-    chunks.push(span);
-  }
-  const audio = new Audio(audioPlayer.src);
-  rehearsalAudioObj = audio;
-  let duration = 0;
-  audio.onloadedmetadata = ()=>{
-    duration = audio.duration / speed;
-    let msPerChunk = duration*1000 / chunks.length;
-    let idx = 0;
-    function next() {
-      if (!rehearsalRunning) return;
-      if (idx > 0) chunks[idx-1].classList.remove("karaoke-active");
-      if (idx < chunks.length) {
-        chunks[idx].classList.add("karaoke-active");
-        let rect = chunks[idx].getBoundingClientRect();
-        let areaRect = rehearsalArea.getBoundingClientRect();
-        if (rect.bottom > areaRect.bottom || rect.top < areaRect.top)
-          chunks[idx].scrollIntoView({behavior:'smooth', block:'center'});
-        idx++;
-        rehearsalTimeout = setTimeout(next, msPerChunk);
-      } else {
-        rehearsalRunning = false; rehearsalTimeout = null;
-        audio.pause();
-      }
-    }
-    rehearsalRunning = true;
-    audio.playbackRate = speed;
-    audio.play();
-    next();
-  };
-  audio.load();
-}
-
-function stopRehearsal() {
-  rehearsalRunning = false;
-  rehearsalTimeout && clearTimeout(rehearsalTimeout);
-  rehearsalTimeout = null;
-  if (rehearsalAudioObj) { rehearsalAudioObj.pause(); rehearsalAudioObj = null; }
-  rehearsalModal.style.display = "none";
-  karaokeCurrent = -1;
-}
-// TOAST (notificaciones rápidas)
-function showToast(msg) {
+function showToast(msg){
   toast.textContent = msg;
   toast.classList.add("visible");
-  setTimeout(()=>toast.classList.remove("visible"), 1700);
+  setTimeout(()=>toast.classList.remove("visible"),1800);
 }
+pdfBtn.onclick = ()=>{
+  let el = songForm;
+  html2pdf().from(el).set({filename: songTitleInput.value+".pdf"}).save();
+};
+rehearsalBtn.onclick = ()=>rehearsalModal.style.display="";
+stopRehearsalBtn.onclick = ()=>rehearsalModal.style.display="none";
+rehearsalSpeedInput.oninput = ()=>rehearsalSpeedLabel.textContent = rehearsalSpeedInput.value==="1"?"Normal":rehearsalSpeedInput.value+"x";
+startRehearsalBtn.onclick = ()=>{
+  let idx = 0;
+  rehearsalArea.innerHTML = "";
+  function next(){
+    renderLetraEditor(idx);
+    idx++;
+    if(idx<=letraOriginal.length)
+      setTimeout(next,900/rehearsalSpeedInput.value);
+    else rehearsalArea.innerHTML = "<b>¡Listo!</b>";
+  }
+  next();
+};
 
-// --- ARRANQUE: inicializa editor vacío en primera carga
 clearEditor();
