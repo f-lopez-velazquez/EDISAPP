@@ -2,122 +2,18 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Cancionero Estudiantina FIMEE</title>
-  <link rel="stylesheet" href="styles.css"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Cancionero EDIS</title>
+  <link rel="icon" href="https://i.imgur.com/8WDPWmf.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script defer src="main.js"></script>
 </head>
 <body>
-  <header>
-    <div class="header-bg">
-      <img src="https://i.imgur.com/sRgWLhM.png" alt="Logo Estudiantina" class="logo"/>
-      <h1>Cancionero Estudiantina FIMEE</h1>
-      <div id="auth-controls">
-        <span id="auth-user"></span>
-        <button id="login-btn" type="button">Iniciar sesión</button>
-        <button id="logout-btn" type="button" style="display:none;">Cerrar sesión</button>
-      </div>
-    </div>
-  </header>
-  <main>
-    <aside id="song-list-container">
-      <button id="new-song-btn">+ Nueva canción</button>
-      <ul id="song-list"></ul>
-    </aside>
-    <section id="song-editor-section">
-      <form id="song-form" autocomplete="off">
-        <label>
-          Título:
-          <input type="text" id="song-title" required />
-        </label>
-        <label>
-          Letra de la canción:
-          <textarea id="letra-in" rows="6" required placeholder="Letra de la canción aquí..."></textarea>
-        </label>
-        <label>
-          Instrumento principal:
-          <select id="instrumento">
-            <option value="guitarra">Guitarra (6 cuerdas)</option>
-            <option value="laud">Laúd (6 cuerdas)</option>
-            <option value="bandurria">Bandurria (6 cuerdas)</option>
-            <option value="mandolina_tricordio">Mandolina/Tricordio (4 cuerdas)</option>
-            <option value="contrabajo">Contrabajo (4 cuerdas)</option>
-            <option value="guitarron">Guitarrón (6 cuerdas)</option>
-          </select>
-        </label>
-        <label>
-          Subir audio (opcional): 
-          <input type="file" id="audio-upload" accept="audio/*" />
-        </label>
-        <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
-        <div class="editor-group">
-          <h3>Editor de Tablatura y Letra Integrada</h3>
-          <div id="arreglos-list"></div>
-          <div id="tablatura-responsive-container">
-            <div id="tablatura"></div>
-            <div id="tablatura-controls">
-              <button id="add-col" type="button">+ Traste/Tiempo</button>
-              <button id="del-col" type="button">- Traste/Tiempo</button>
-              <button id="add-arreglo" type="button">+ Arreglo</button>
-              <button id="del-arreglo" type="button">- Arreglo</button>
-              <button id="toggle-lyrics" type="button">Mostrar/Ocultar letra</button>
-            </div>
-          </div>
-        </div>
-        <div class="editor-group">
-          <h3>Editor de Rasgueo (sólo guitarra)</h3>
-          <div id="rasgueo"></div>
-        </div>
-        <div class="editor-group">
-          <h3>Letra y acordes (mapear acorde en cualquier letra)</h3>
-          <div id="letra"></div>
-        </div>
-        <div class="editor-btn-row">
-          <button id="save-song" type="submit">Guardar canción</button>
-          <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
-          <button id="rehearsal-btn" type="button" style="background:#5e47a1; color:#fff;">Ensayo en vivo</button>
-          <button id="cancel-edit" type="button" style="background:#888;margin-left:8px;">Cancelar</button>
-        </div>
-        <div id="last-saved" style="font-size:0.95em; color:#999;margin-top:6px;"></div>
-      </form>
-      <!-- Modal para ensayo en vivo -->
-      <div id="rehearsal-modal" class="modal-bg" style="display:none;">
-        <div class="modal-box" id="rehearsal-box">
-          <h2>Ensayo en vivo</h2>
-          <label>Modo de ensayo:
-            <select id="rehearsal-mode">
-              <option value="letra">Letra + acordes (karaoke)</option>
-              <option value="tablatura">Tablatura animada</option>
-              <option value="sincronizar">Sincronizar con audio (si hay)</option>
-            </select>
-          </label>
-          <label>Velocidad:
-            <input type="range" id="rehearsal-speed" min="0.5" max="2.5" step="0.01" value="1"/>
-            <span id="rehearsal-speed-label">Normal</span>
-          </label>
-          <button id="start-rehearsal" type="button">Comenzar</button>
-          <button id="stop-rehearsal" type="button" style="background:#888;">Cerrar</button>
-          <div id="rehearsal-area"></div>
-        </div>
-      </div>
-    </section>
-  </main>
-  <footer>
-    <div class="footer-bg">
-      Creado por Francisco López Velázquez &copy; 2024
-    </div>
-  </footer>
-  <div id="toast"></div>
-  <div id="modal-bg" class="modal-bg" style="display:none;">
-    <div class="modal-box" id="login-modal">
-      <h2>Iniciar sesión</h2>
-      <label>Email:<br><input id="login-email" type="email" /></label>
-      <label>Contraseña:<br><input id="login-pass" type="password" /></label>
-      <button id="do-login-btn" type="button">Entrar</button>
-      <div id="login-error" style="color:#b00;margin-top:8px;"></div>
-    </div>
-  </div>
-  <!-- html2pdf debe ir antes de main.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script type="module" src="main.js"></script>
+  <div id="root"></div>
 </body>
 </html>
