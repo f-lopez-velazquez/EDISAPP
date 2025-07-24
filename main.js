@@ -10,7 +10,6 @@ if (localStorage.getItem("edis_adminMode") === "true") {
   adminMode = false;
   currentUser = null;
 }
-
 function bienvenida(mode) {
   let msg = "";
   if (mode === "admin") {
@@ -20,7 +19,6 @@ function bienvenida(mode) {
   }
   showToast(msg, 2000);
 }
-
 function renderLoginBox() {
   document.body.innerHTML = `
     <div class="wow-login-bg"></div>
@@ -58,7 +56,6 @@ function renderLoginBox() {
     setTimeout(()=>location.reload(), 800);
   }
 }
-
 function setupAdminUI() {
   const ui = document.getElementById("user-info");
   if (!ui) return;
@@ -125,11 +122,12 @@ let songList = [];
 let currentSong = null;
 let isNew = false;
 let tabData = {};
+let tabVoices = []; // Para arreglos/voz dinámico, [{nombre, matriz}]
+let currentVoice = "Principal";
+let currentInstrument = "guitarra";
 let letraOriginal = "";
 let acordesArriba = {};
 let rasgueoArr = [];
-let currentVoice = "Principal";
-let currentInstrument = "guitarra";
 let lastSavedData = "";
 
 // ========== 4. ELEMENTOS DOM ==========
@@ -142,6 +140,7 @@ const instrSpan = document.getElementById("tabs-voz");
 const tablaturaDiv = document.getElementById("tablatura");
 const addColBtn = document.getElementById("add-col");
 const delColBtn = document.getElementById("del-col");
+const addArregloBtn = document.getElementById("add-arreglo");
 const letraDiv = document.getElementById("letra");
 const rasgueoDiv = document.getElementById("rasgueo");
 const audioUpload = document.getElementById("audio-upload");
@@ -161,7 +160,7 @@ async function loadSongList() {
   songList = [];
   songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
   const snap = await getDocs(collection(db, "canciones"));
-  snap.forEach(doc => songList.push({id:doc.id, ...doc.data()}));
+  snap.forEach(doc => songList.push({id:doc.id, ...deserializeTabData(doc.data())}));
   renderSongList();
 }
 function renderSongList() {
@@ -184,14 +183,15 @@ function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
   instrumentoSel.value = "guitarra";
-  instrSpan.textContent = "";
   tabData = {};
-  currentVoice = VOICES["guitarra"][0];
+  tabVoices = [];
+  currentVoice = "Principal";
   ["guitarra","laud","bandurria","mandolina","tricordio","contrabajo","guitarron"].forEach(instr=>{
     for(const voz of VOICES[instr]) {
       if(!tabData[voz]) tabData[voz] = createEmptyTab(instr, DEFAULT_BEATS);
     }
   });
+  tabVoices = [{nombre:"Principal", matriz:createEmptyTab("guitarra",DEFAULT_BEATS)}];
   letraOriginal = "";
   acordesArriba = {};
   rasgueoArr = [];
@@ -208,13 +208,9 @@ function fillFormFromSong(song) {
   letraInput.value = song.letra;
   instrumentoSel.value = song.instrumento;
   currentInstrument = song.instrumento;
-  instrSpan.textContent = "";
   tabData = song.tablatura || {};
-  if(!tabData) tabData = {};
-  for(const voz of (VOICES[song.instrumento]||["Principal"])) {
-    if(!tabData[voz]) tabData[voz] = createEmptyTab(song.instrumento, DEFAULT_BEATS);
-  }
-  currentVoice = (VOICES[song.instrumento]||["Principal"])[0];
+  tabVoices = deserializeTabVoices(song.tabVoices, song.instrumento) || [{nombre:"Principal", matriz:createEmptyTab(song.instrumento,DEFAULT_BEATS)}];
+  currentVoice = tabVoices[0]?.nombre || "Principal";
   letraOriginal = song.letra || "";
   acordesArriba = song.acordesArriba || {};
   rasgueoArr = song.rasgueo || [];
@@ -236,49 +232,113 @@ function showToast(msg, dur=1500) {
   setTimeout(()=>toast.classList.remove("visible"), dur);
 }
 
-// ============ 6. INSTRUMENTO, VOZ, TABLATURA SVG WOW =============
+// SERIALIZACIÓN para evitar nested arrays en Firebase
+function serializeTabVoices(tabVoices){
+  // tabVoices: [{nombre, matriz: [ [x],[x], ... ]}]
+  let obj = {};
+  for(const v of tabVoices){
+    obj[v.nombre] = {};
+    for(let i=0;i<v.matriz.length;i++){
+      obj[v.nombre]["s"+i] = v.matriz[i];
+    }
+  }
+  return obj;
+}
+function deserializeTabVoices(raw, instr){
+  if(!raw) return [{nombre:"Principal", matriz:createEmptyTab(instr, DEFAULT_BEATS)}];
+  let arr = [];
+  for(const [nombre,obj] of Object.entries(raw)){
+    let matriz = [];
+    let s = 0;
+    while(obj["s"+s]!==undefined){
+      matriz.push(obj["s"+s]);
+      s++;
+    }
+    arr.push({nombre,matriz});
+  }
+  return arr;
+}
+function deserializeTabData(songData){
+  if(!songData.tabVoices) return songData;
+  let tabVoices = deserializeTabVoices(songData.tabVoices, songData.instrumento);
+  songData.tabVoices = tabVoices;
+  return songData;
+}
+// ========== 6. INSTRUMENTO, VOZ/ARREGLO, TABLATURA SVG WOW ===========
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
-  // Regenera la estructura al cambiar instrumento
-  tabData = {};
-  for(const voz of (VOICES[currentInstrument]||["Principal"])) {
-    tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
-  }
-  currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
-  renderTabsVozBtns(currentInstrument);
+  tabVoices = [{nombre:"Principal", matriz:createEmptyTab(currentInstrument, DEFAULT_BEATS)}];
+  currentVoice = "Principal";
+  renderTabsVozBtns();
   renderTablatureEditorSVG();
   renderRasgueoEditor();
 };
-function renderTabsVozBtns(instr) {
-  const voces = VOICES[instr] || ["Principal"];
+
+function renderTabsVozBtns() {
   tabsVozBtns.innerHTML = "";
-  voces.forEach(vz => {
+  tabVoices.forEach(vz => {
     const btn = document.createElement("button");
-    btn.textContent = vz;
+    btn.textContent = vz.nombre;
     btn.className = "voz-btn";
-    if (vz === currentVoice) btn.classList.add("active");
-    btn.onclick = (e)=>{ e.preventDefault(); currentVoice = vz; renderTablatureEditorSVG(); };
+    if (vz.nombre === currentVoice) btn.classList.add("active");
+    btn.onclick = (e)=>{
+      e.preventDefault();
+      currentVoice = vz.nombre;
+      renderTabsVozBtns();
+      renderTablatureEditorSVG();
+    };
     tabsVozBtns.appendChild(btn);
   });
+  // Botón eliminar voz/arreglo (excepto Principal)
+  if (tabVoices.length > 1 && adminMode) {
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "🗑️";
+    delBtn.className = "voz-btn";
+    delBtn.onclick = ()=>{
+      if(currentVoice==="Principal") return;
+      tabVoices = tabVoices.filter(v=>v.nombre!==currentVoice);
+      currentVoice = tabVoices[0].nombre;
+      renderTabsVozBtns();
+      renderTablatureEditorSVG();
+    };
+    tabsVozBtns.appendChild(delBtn);
+  }
 }
+
+addArregloBtn.onclick = ()=>{
+  if(!adminMode) return;
+  let nombre = prompt("Nombre de la voz/arreglo:");
+  if(!nombre) return;
+  if(tabVoices.some(v=>v.nombre===nombre)){
+    showToast("¡Ya existe ese nombre de voz/arreglo!");
+    return;
+  }
+  tabVoices.push({nombre, matriz:createEmptyTab(currentInstrument, DEFAULT_BEATS)});
+  currentVoice = nombre;
+  renderTabsVozBtns();
+  renderTablatureEditorSVG();
+};
+
 addColBtn.onclick = () => {
-  let t = tabData[currentVoice];
-  for (let s = 0; s < t.length; s++) t[s].push("");
+  let voz = tabVoices.find(v=>v.nombre===currentVoice);
+  if (!voz) return;
+  for (let s = 0; s < voz.matriz.length; s++) voz.matriz[s].push("");
   renderTablatureEditorSVG();
 };
 delColBtn.onclick = () => {
-  let t = tabData[currentVoice];
-  if (t[0].length > 1) {
-    for (let s = 0; s < t.length; s++) t[s].pop();
+  let voz = tabVoices.find(v=>v.nombre===currentVoice);
+  if (!voz) return;
+  if (voz.matriz[0].length > 1) {
+    for (let s = 0; s < voz.matriz.length; s++) voz.matriz[s].pop();
     renderTablatureEditorSVG();
   }
 };
 
-// --- SVG DE TABLATURA WOW (círculo centrado, símbolos pro, para 6 y 4 cuerdas, etc) ---
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
-  const t = tabData[currentVoice];
-  if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
+  let voz = tabVoices.find(v=>v.nombre===currentVoice);
+  if(!voz) { tablaturaDiv.textContent = "No hay tablatura."; return; }
+  const t = voz.matriz;
   const numStrings = t.length;
   const numBeats = t[0].length;
   const IS_4C = (numStrings === 4);
@@ -329,7 +389,6 @@ function renderTablatureEditorSVG() {
     txt.textContent = (b+1);
     svg.appendChild(txt);
   }
-
   // Círculos/símbolos
   for (let s = 0; s < numStrings; s++) {
     let y = 19 + s*30;
@@ -345,7 +404,7 @@ function renderTablatureEditorSVG() {
       }
       let x = 28 + b*48 + 24;
       if(val) {
-        // Símbolos especiales:
+        // Símbolos especiales (igual que antes)
         if(val==="↑" || tipo==="flechaU") {
           let flecha = document.createElementNS("http://www.w3.org/2000/svg","text");
           flecha.setAttribute("x", x); flecha.setAttribute("y", y+7);
@@ -467,14 +526,13 @@ function renderTablatureEditorSVG() {
   }
   tablaturaDiv.appendChild(svg);
 }
-
-// ========== 7. Letra y acordes =============
+// ========== 7. LETRA Y ACORDES =============
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
-  for (let i = 0; i < letraOriginal.length; i++) {
+  for (let i = 0; i < letraInput.value.length; i++) {
     const span = document.createElement("span");
     span.className = "lyric-chunk";
-    span.textContent = letraOriginal[i];
+    span.textContent = letraInput.value[i];
     if (acordesArriba[i]) {
       const chord = document.createElement("span");
       chord.className = "chord-above";
@@ -504,7 +562,7 @@ letraInput.oninput = ()=>{
   renderLetraEditor();
 };
 
-// ========== 8. Rasgueo visual avanzado ==========
+// ========== 8. RASGUEO WOW PRO ===============
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -515,39 +573,54 @@ function renderRasgueoEditor() {
   seq.style.display = "flex";
   seq.style.gap = "9px";
   rasgueoArr.forEach((r, idx) => {
-    const icon = document.createElement("span");
+    let icon = document.createElement("span");
     icon.className = "rasgueo-icon";
-    if (r.type==="bajeo") icon.innerHTML = `<span style="font-size:.8em">${r.str}</span><span style="font-size:1.1em;">&#8595;</span>`;
-    else if (r.type==="flecha-chica") icon.innerHTML = `<span style="font-size:1.17em;opacity:.7;">&#8595;</span>`;
-    else if (r.type==="flecha") icon.innerHTML = "&#8595;";
+    // Nomenclatura pro, visual:
+    if (r.type==="flechaD") icon.innerHTML = "&#8595;";
+    else if (r.type==="flechaU") icon.innerHTML = "&#8593;";
+    else if (r.type==="muteo") icon.innerHTML = '<span style="font-size:1.2em;color:#d91432;">𝄽</span>';
+    else if (r.type==="bajeo") icon.innerHTML = `<span style="font-weight:bold;color:#4ab849;">B</span>`;
     else icon.innerHTML = r.symb||"•";
     if(adminMode) {
       icon.onclick = () => { rasgueoArr.splice(idx, 1); renderRasgueoEditor(); };
+      icon.title = "Eliminar este rasgueo";
     }
     seq.appendChild(icon);
   });
   rasgueoDiv.appendChild(seq);
-  if(!adminMode) return;
-  const controls = document.createElement("div");
-  let btn = document.createElement("button");
-  btn.textContent = "↓";
-  btn.onclick = (e)=>{ e.preventDefault(); rasgueoArr.push({type:"flecha"}); renderRasgueoEditor(); };
-  controls.appendChild(btn);
-  btn = document.createElement("button");
-  btn.innerHTML = `<span style="font-size:1.1em;">↓</span><span style="font-size:.68em;position:relative;top:6px;">(ch)</span>`;
-  btn.onclick = (e)=>{ e.preventDefault(); rasgueoArr.push({type:"flecha-chica"}); renderRasgueoEditor(); };
-  controls.appendChild(btn);
-  [6,5,4].forEach(str=>{
-    let bbtn = document.createElement("button");
-    bbtn.innerHTML = `${str}↓`;
-    bbtn.onclick = (e)=>{ e.preventDefault(); rasgueoArr.push({type:"bajeo",str}); renderRasgueoEditor(); };
-    controls.appendChild(bbtn);
-  });
-  btn = document.createElement("button");
-  btn.textContent = "X";
-  btn.onclick = (e)=>{ e.preventDefault(); rasgueoArr.push({type:"muteo"}); renderRasgueoEditor(); };
-  controls.appendChild(btn);
-  rasgueoDiv.appendChild(controls);
+
+  // Barra de símbolos abajo (agregar rasgueo, muy pro y clara):
+  if(adminMode) {
+    let bar = document.createElement("div");
+    bar.className = "rasgueo-toolbar";
+    [
+      {type:"flechaD", icon:"&#8595;", tip:"Rasgueo abajo"},
+      {type:"flechaU", icon:"&#8593;", tip:"Rasgueo arriba"},
+      {type:"bajeo", icon:"<b>B</b>", tip:"Bajeo"},
+      {type:"muteo", icon:"<span style='color:#d91432'>𝄽</span>", tip:"Muteo"},
+    ].forEach(item=>{
+      let btn = document.createElement("button");
+      btn.innerHTML = item.icon;
+      btn.title = item.tip;
+      btn.onclick = (e)=>{
+        e.preventDefault();
+        rasgueoArr.push({type:item.type});
+        renderRasgueoEditor();
+      };
+      bar.appendChild(btn);
+    });
+    rasgueoDiv.appendChild(bar);
+
+    let leyenda = document.createElement("div");
+    leyenda.style.fontSize = ".98em";
+    leyenda.style.marginTop = "8px";
+    leyenda.style.color = "#7e7e7e";
+    leyenda.innerHTML = `
+      <b>Guía:</b> <b style="color:#007aff;">&#8593;</b>=Arriba, <b style="color:#d99400;">&#8595;</b>=Abajo, <b style="color:#44a947;">B</b>=Bajeo, <b style="color:#d91432;">𝄽</b>=Muteo.
+      <span style="margin-left:1.5em;">Haz clic sobre un ícono para quitarlo.</span>
+    `;
+    rasgueoDiv.appendChild(leyenda);
+  }
 }
 
 // ========== 9. AUDIO ==========
@@ -583,7 +656,7 @@ saveBtn.onclick = (e)=>{
   }
 };
 
-// ========== 11. GUARDAR EN FIREBASE ==========
+// ========== 11. GUARDAR EN FIREBASE SIN NESTED ARRAYS ==========
 songForm.onsubmit = async function(e) {
   e.preventDefault();
   if(!adminMode) {
@@ -603,7 +676,7 @@ songForm.onsubmit = async function(e) {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
-    tablatura: tabData,
+    tabVoices: serializeTabVoices(tabVoices),
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
     audioUrl
@@ -628,7 +701,7 @@ function getCurrentSongData() {
     titulo: songTitleInput.value,
     letra: letraInput.value,
     instrumento: instrumentoSel.value,
-    tablatura: tabData,
+    tabVoices: serializeTabVoices(tabVoices),
     acordesArriba,
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
     audioUrl: currentSong ? currentSong.audioUrl : ""
@@ -686,17 +759,16 @@ pdfBtn.onclick = ()=>{
   }
 };
 
-// ========== 14. ENSAYO EN VIVO ============
+// ========== 14. ENSAYO EN VIVO PRO ============
 ensayoBtn.onclick = ()=>{
   ensayoVivoDiv.innerHTML = "";
-  if (!letraOriginal || letraOriginal.length === 0) {
+  if (!letraInput.value || letraInput.value.length === 0) {
     showToast("Agrega una letra para ensayar en vivo");
     return;
   }
   let velocidad = 500;
   let corriendo = false;
   let idx = 0;
-
   ensayoVivoDiv.innerHTML = `
     <div style="margin:1em 0;">
       <label>Velocidad: <input id="vel-ensayo" type="range" min="100" max="1500" step="50" value="${velocidad}"/> <span id="vel-label">${velocidad} ms</span></label>
@@ -713,10 +785,10 @@ ensayoBtn.onclick = ()=>{
 
   function renderLetraEnsayo(i) {
     letraEnsayoDiv.innerHTML = "";
-    for (let j = 0; j < letraOriginal.length; j++) {
+    for (let j = 0; j < letraInput.value.length; j++) {
       const span = document.createElement("span");
       span.className = "lyric-chunk";
-      span.textContent = letraOriginal[j];
+      span.textContent = letraInput.value[j];
       if (acordesArriba[j]) {
         const chord = document.createElement("span");
         chord.className = "chord-above";
@@ -738,7 +810,7 @@ ensayoBtn.onclick = ()=>{
     if (!corriendo) return;
     renderLetraEnsayo(idx);
     idx++;
-    if (idx < letraOriginal.length) {
+    if (idx < letraInput.value.length) {
       timer = setTimeout(correrEnsayo, velocidad);
     } else {
       corriendo = false;

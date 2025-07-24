@@ -22,30 +22,32 @@
     </aside>
     <section id="song-editor-section" class="glass-main">
       <form id="song-form" autocomplete="off">
-        <label>
-          Título:
-          <input type="text" id="song-title" required />
-        </label>
+        <div class="inputs-grid">
+          <label>
+            Título:
+            <input type="text" id="song-title" required maxlength="90" />
+          </label>
+          <label>
+            Instrumento principal:
+            <select id="instrumento">
+              <option value="guitarra">Guitarra (6)</option>
+              <option value="laud">Laúd (6)</option>
+              <option value="bandurria">Bandurria (6)</option>
+              <option value="mandolina">Mandolina/Tricordio (4)</option>
+              <option value="contrabajo">Contrabajo (4)</option>
+              <option value="guitarron">Guitarrón (6)</option>
+            </select>
+          </label>
+          <label>
+            Subir audio (opcional): 
+            <input type="file" id="audio-upload" accept="audio/*" />
+          </label>
+        </div>
+        <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
         <label>
           Letra de la canción:
-          <textarea id="letra-in" rows="6" required></textarea>
+          <textarea id="letra-in" rows="6" required maxlength="2400"></textarea>
         </label>
-        <label>
-          Instrumento principal:
-          <select id="instrumento">
-            <option value="guitarra">Guitarra (6)</option>
-            <option value="laud">Laúd (6)</option>
-            <option value="bandurria">Bandurria (6)</option>
-            <option value="mandolina">Mandolina/Tricordio (4)</option>
-            <option value="contrabajo">Contrabajo (4)</option>
-            <option value="guitarron">Guitarrón (6)</option>
-          </select>
-        </label>
-        <label>
-          Subir audio (opcional): 
-          <input type="file" id="audio-upload" accept="audio/*" />
-        </label>
-        <audio id="audio-player" controls style="width:100%;margin:10px 0;display:none"></audio>
         <div class="editor-group">
           <h3>
             Editor de Tablatura 
@@ -55,9 +57,10 @@
           <div id="tablatura"></div>
           <button id="add-col" type="button" class="btn-glass">+ Tiempo</button>
           <button id="del-col" type="button" class="btn-glass">- Tiempo</button>
+          <button id="add-arreglo" type="button" class="btn-glass blue">+ Arreglo/Voz</button>
         </div>
         <div class="editor-group">
-          <h3>Editor de Rasgueo (sólo guitarra)</h3>
+          <h3>Editor de Rasgueo <span class="rasgueo-leyenda">(Guitarra)</span></h3>
           <div id="rasgueo"></div>
         </div>
         <div class="editor-group">
