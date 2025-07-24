@@ -1,8 +1,7 @@
-// ========== 1. LOGIN, ROLES, ADMIN, MENSAJE WOW =============
+// ========== 1. LOGIN Y ROLES ==========
 const ADMIN_MAIL = "edis.ugto@gmail.com";
 let adminMode = false;
 let currentUser = null;
-
 if (localStorage.getItem("edis_adminMode") === "true") {
   adminMode = true;
   currentUser = {email: ADMIN_MAIL};
@@ -11,13 +10,12 @@ if (localStorage.getItem("edis_adminMode") === "true") {
   currentUser = null;
 }
 function bienvenida(mode) {
-  let msg = "";
-  if (mode === "admin") {
-    msg = "¡Bienvenido, administrador! Tienes acceso total para crear, editar y gestionar canciones.";
-  } else {
-    msg = "¡Bienvenido! Estás en modo usuario. Puedes ver y ensayar canciones.";
-  }
-  showToast(msg, 2000);
+  showToast(
+    mode === "admin"
+      ? "¡Bienvenido, administrador! Tienes acceso total para crear, editar y gestionar canciones."
+      : "¡Bienvenido! Estás en modo usuario. Puedes ver y ensayar canciones.",
+    2000
+  );
 }
 function renderLoginBox() {
   document.body.innerHTML = `
@@ -86,7 +84,7 @@ function setupAdminUI() {
   }
 }
 
-// ========== 2. FIREBASE INIT ==========
+// ========== 2. FIREBASE ==========
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
@@ -103,26 +101,15 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ========== 3. VARIABLES ==========
+// ========== 3. VARIABLES Y ELEMENTOS ==========
 const INSTRUMENTS = {
   guitarra: 6, laud: 6, bandurria: 6, mandolina: 4, tricordio: 4, contrabajo: 4, guitarron: 6
 };
-const VOICES = {
-  guitarra: ["Principal"],
-  laud: ["1ra", "2da", "3ra", "arreglos"],
-  bandurria: ["1ra", "2da", "3ra", "arreglos"],
-  mandolina: ["1ra", "2da", "3ra", "arreglos"],
-  tricordio: ["1ra", "2da", "3ra", "arreglos"],
-  contrabajo: ["Principal"],
-  guitarron: ["Principal"]
-};
 const DEFAULT_BEATS = 16;
-
 let songList = [];
 let currentSong = null;
 let isNew = false;
-let tabData = {};
-let tabVoices = []; // Para arreglos/voz dinámico, [{nombre, matriz}]
+let tabVoices = [];
 let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let letraOriginal = "";
@@ -130,18 +117,17 @@ let acordesArriba = {};
 let rasgueoArr = [];
 let lastSavedData = "";
 
-// ========== 4. ELEMENTOS DOM ==========
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
 const letraInput = document.getElementById("letra-in");
 const instrumentoSel = document.getElementById("instrumento");
-const instrSpan = document.getElementById("tabs-voz");
 const tablaturaDiv = document.getElementById("tablatura");
 const addColBtn = document.getElementById("add-col");
 const delColBtn = document.getElementById("del-col");
 const addArregloBtn = document.getElementById("add-arreglo");
 const letraDiv = document.getElementById("letra");
+const letraAcordesDiv = document.getElementById("letra-con-acordes");
 const rasgueoDiv = document.getElementById("rasgueo");
 const audioUpload = document.getElementById("audio-upload");
 const audioPlayer = document.getElementById("audio-player");
@@ -155,12 +141,64 @@ const lastSavedDiv = document.getElementById("last-saved");
 const ensayoBtn = document.getElementById("ensayo-song");
 const ensayoVivoDiv = document.getElementById("ensayo-vivo");
 
-// ========== 5. LISTADO DE CANCIONES ==========
+// ========== 4. FUNCIONES BASE ==========
+// Serializar matriz para Firebase (NO anidados)
+function serializeTabVoices(tabVoices){
+  let obj = {};
+  for(const v of tabVoices){
+    obj[v.nombre] = {};
+    for(let i=0;i<v.matriz.length;i++){
+      let row = v.matriz[i].map(x => (typeof x === 'object' && x !== null) ? JSON.stringify(x) : x);
+      obj[v.nombre]["s"+i] = row;
+    }
+  }
+  return obj;
+}
+function deserializeTabVoices(raw, instr){
+  if(!raw) return [{nombre:"Principal", matriz:createEmptyTab(instr, DEFAULT_BEATS)}];
+  let arr = [];
+  for(const [nombre,obj] of Object.entries(raw)){
+    let matriz = [];
+    let s = 0;
+    while(obj["s"+s]!==undefined){
+      let row = obj["s"+s];
+      if (Array.isArray(row)) {
+        for(let j=0;j<row.length;j++){
+          if (typeof row[j]==="string" && row[j].startsWith("{") && row[j].endsWith("}")) {
+            try { row[j]=JSON.parse(row[j]); } catch{}
+          }
+        }
+      }
+      matriz.push(row);
+      s++;
+    }
+    arr.push({nombre,matriz});
+  }
+  return arr.length ? arr : [{nombre:"Principal", matriz:createEmptyTab(instr, DEFAULT_BEATS)}];
+}
+function showToast(msg, dur=1500) {
+  toast.textContent = msg;
+  toast.classList.add("visible");
+  setTimeout(()=>toast.classList.remove("visible"), dur);
+}
+function createEmptyTab(instr, beats) {
+  const strings = INSTRUMENTS[instr];
+  return Array(strings).fill().map(() => Array(beats).fill(""));
+}
+function getCurrentVoiceObj() {
+  return tabVoices.find(v=>v.nombre===currentVoice) || tabVoices[0];
+}
+
+// ========== 5. LISTADO Y CARGA DE CANCIONES ==========
 async function loadSongList() {
   songList = [];
   songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
   const snap = await getDocs(collection(db, "canciones"));
-  snap.forEach(doc => songList.push({id:doc.id, ...deserializeTabData(doc.data())}));
+  snap.forEach(doc => {
+    let d = doc.data();
+    d.tabVoices = deserializeTabVoices(d.tabVoices, d.instrumento);
+    songList.push({id:doc.id, ...d});
+  });
   renderSongList();
 }
 function renderSongList() {
@@ -183,88 +221,42 @@ function clearEditor() {
   songTitleInput.value = "";
   letraInput.value = "";
   instrumentoSel.value = "guitarra";
-  tabData = {};
-  tabVoices = [];
-  currentVoice = "Principal";
-  ["guitarra","laud","bandurria","mandolina","tricordio","contrabajo","guitarron"].forEach(instr=>{
-    for(const voz of VOICES[instr]) {
-      if(!tabData[voz]) tabData[voz] = createEmptyTab(instr, DEFAULT_BEATS);
-    }
-  });
   tabVoices = [{nombre:"Principal", matriz:createEmptyTab("guitarra",DEFAULT_BEATS)}];
+  currentVoice = "Principal";
   letraOriginal = "";
   acordesArriba = {};
   rasgueoArr = [];
   audioPlayer.src = "";
   audioPlayer.style.display = "none";
-  renderTabsVozBtns("guitarra");
+  renderTabsVozBtns();
   renderTablatureEditorSVG();
   renderLetraEditor();
+  renderLetraConAcordes();
   renderRasgueoEditor();
   ensayoVivoDiv.innerHTML = "";
 }
 function fillFormFromSong(song) {
-  songTitleInput.value = song.titulo;
-  letraInput.value = song.letra;
-  instrumentoSel.value = song.instrumento;
-  currentInstrument = song.instrumento;
-  tabData = song.tablatura || {};
-  tabVoices = deserializeTabVoices(song.tabVoices, song.instrumento) || [{nombre:"Principal", matriz:createEmptyTab(song.instrumento,DEFAULT_BEATS)}];
+  songTitleInput.value = song.titulo || "";
+  letraInput.value = song.letra || "";
+  instrumentoSel.value = song.instrumento || "guitarra";
+  tabVoices = song.tabVoices && song.tabVoices.length
+    ? song.tabVoices
+    : [{nombre:"Principal", matriz:createEmptyTab(song.instrumento||"guitarra",DEFAULT_BEATS)}];
   currentVoice = tabVoices[0]?.nombre || "Principal";
   letraOriginal = song.letra || "";
   acordesArriba = song.acordesArriba || {};
   rasgueoArr = song.rasgueo || [];
   audioPlayer.style.display = song.audioUrl ? "" : "none";
   audioPlayer.src = song.audioUrl || "";
-  renderTabsVozBtns(song.instrumento);
+  renderTabsVozBtns();
   renderTablatureEditorSVG();
   renderLetraEditor();
+  renderLetraConAcordes();
   renderRasgueoEditor();
   ensayoVivoDiv.innerHTML = "";
 }
-function createEmptyTab(instr, beats) {
-  const strings = INSTRUMENTS[instr];
-  return Array(strings).fill().map(() => Array(beats).fill(""));
-}
-function showToast(msg, dur=1500) {
-  toast.textContent = msg;
-  toast.classList.add("visible");
-  setTimeout(()=>toast.classList.remove("visible"), dur);
-}
 
-// SERIALIZACIÓN para evitar nested arrays en Firebase
-function serializeTabVoices(tabVoices){
-  // tabVoices: [{nombre, matriz: [ [x],[x], ... ]}]
-  let obj = {};
-  for(const v of tabVoices){
-    obj[v.nombre] = {};
-    for(let i=0;i<v.matriz.length;i++){
-      obj[v.nombre]["s"+i] = v.matriz[i];
-    }
-  }
-  return obj;
-}
-function deserializeTabVoices(raw, instr){
-  if(!raw) return [{nombre:"Principal", matriz:createEmptyTab(instr, DEFAULT_BEATS)}];
-  let arr = [];
-  for(const [nombre,obj] of Object.entries(raw)){
-    let matriz = [];
-    let s = 0;
-    while(obj["s"+s]!==undefined){
-      matriz.push(obj["s"+s]);
-      s++;
-    }
-    arr.push({nombre,matriz});
-  }
-  return arr;
-}
-function deserializeTabData(songData){
-  if(!songData.tabVoices) return songData;
-  let tabVoices = deserializeTabVoices(songData.tabVoices, songData.instrumento);
-  songData.tabVoices = tabVoices;
-  return songData;
-}
-// ========== 6. INSTRUMENTO, VOZ/ARREGLO, TABLATURA SVG WOW ===========
+// ========== 6. INSTRUMENTO, VOZ/ARREGLO, TABLATURA ===========
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
   tabVoices = [{nombre:"Principal", matriz:createEmptyTab(currentInstrument, DEFAULT_BEATS)}];
@@ -273,7 +265,6 @@ instrumentoSel.onchange = () => {
   renderTablatureEditorSVG();
   renderRasgueoEditor();
 };
-
 function renderTabsVozBtns() {
   tabsVozBtns.innerHTML = "";
   tabVoices.forEach(vz => {
@@ -289,7 +280,6 @@ function renderTabsVozBtns() {
     };
     tabsVozBtns.appendChild(btn);
   });
-  // Botón eliminar voz/arreglo (excepto Principal)
   if (tabVoices.length > 1 && adminMode) {
     const delBtn = document.createElement("button");
     delBtn.textContent = "🗑️";
@@ -304,7 +294,6 @@ function renderTabsVozBtns() {
     tabsVozBtns.appendChild(delBtn);
   }
 }
-
 addArregloBtn.onclick = ()=>{
   if(!adminMode) return;
   let nombre = prompt("Nombre de la voz/arreglo:");
@@ -318,26 +307,27 @@ addArregloBtn.onclick = ()=>{
   renderTabsVozBtns();
   renderTablatureEditorSVG();
 };
-
 addColBtn.onclick = () => {
-  let voz = tabVoices.find(v=>v.nombre===currentVoice);
+  let voz = getCurrentVoiceObj();
   if (!voz) return;
   for (let s = 0; s < voz.matriz.length; s++) voz.matriz[s].push("");
   renderTablatureEditorSVG();
 };
 delColBtn.onclick = () => {
-  let voz = tabVoices.find(v=>v.nombre===currentVoice);
+  let voz = getCurrentVoiceObj();
   if (!voz) return;
   if (voz.matriz[0].length > 1) {
     for (let s = 0; s < voz.matriz.length; s++) voz.matriz[s].pop();
     renderTablatureEditorSVG();
   }
 };
-
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
-  let voz = tabVoices.find(v=>v.nombre===currentVoice);
-  if(!voz) { tablaturaDiv.textContent = "No hay tablatura."; return; }
+  let voz = getCurrentVoiceObj();
+  if(!voz || !voz.matriz || !voz.matriz[0]) {
+    tablaturaDiv.textContent = "No hay tablatura.";
+    return;
+  }
   const t = voz.matriz;
   const numStrings = t.length;
   const numBeats = t[0].length;
@@ -404,7 +394,6 @@ function renderTablatureEditorSVG() {
       }
       let x = 28 + b*48 + 24;
       if(val) {
-        // Símbolos especiales (igual que antes)
         if(val==="↑" || tipo==="flechaU") {
           let flecha = document.createElementNS("http://www.w3.org/2000/svg","text");
           flecha.setAttribute("x", x); flecha.setAttribute("y", y+7);
@@ -526,6 +515,7 @@ function renderTablatureEditorSVG() {
   }
   tablaturaDiv.appendChild(svg);
 }
+
 // ========== 7. LETRA Y ACORDES =============
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
@@ -551,6 +541,7 @@ function renderLetraEditor() {
           delete acordesArriba[i];
         }
         renderLetraEditor();
+        renderLetraConAcordes();
       };
     }
     letraDiv.appendChild(span);
@@ -560,7 +551,24 @@ letraInput.oninput = ()=>{
   letraOriginal = letraInput.value;
   acordesArriba = {};
   renderLetraEditor();
+  renderLetraConAcordes();
 };
+
+// ========== 7B. LETRA CON ACORDES MAPEADA =============
+function renderLetraConAcordes() {
+  const div = document.getElementById("letra-con-acordes");
+  div.innerHTML = "";
+  if (!letraInput.value) return;
+  // Render como dos filas: acordes (o espacio), luego letra:
+  let filaAcordes = "";
+  let filaLetra = "";
+  for(let i=0;i<letraInput.value.length;i++) {
+    let chord = acordesArriba[i] ? acordesArriba[i] : " ";
+    filaAcordes += chord.padEnd(chord.length<1?1:chord.length," ");
+    filaLetra   += letraInput.value[i];
+  }
+  div.innerHTML = `<pre style="font-family:Menlo,monospace;font-size:1.13em;margin:0;color:#3b306c;">${filaAcordes}\n${filaLetra}</pre>`;
+}
 
 // ========== 8. RASGUEO WOW PRO ===============
 function renderRasgueoEditor() {
