@@ -1,69 +1,92 @@
-// ===================== MAIN.JS =====================
+// ========== 1. LOGIN WOW, ROLES, ADMIN =============
 
-// --- 1. LOGIN, ROLES Y ADMIN ---
+// Admin hardcode: edis.ugto@gmail.com / jijijija55
 const ADMIN_MAIL = "edis.ugto@gmail.com";
 let adminMode = false;
 let currentUser = null;
 
+// Checa localStorage para mantener sesión tras reload:
+if (localStorage.getItem("edis_adminMode") === "true") {
+  adminMode = true;
+  currentUser = {email: ADMIN_MAIL};
+} else {
+  adminMode = false;
+  currentUser = null;
+}
+
+// Mensaje WOW
+function bienvenida(mode) {
+  let msg = "";
+  if (mode === "admin") {
+    msg = "¡Bienvenido, administrador! Tienes acceso total para crear, editar y gestionar canciones.";
+  } else {
+    msg = "¡Bienvenido! Estás en modo usuario. Puedes ver y ensayar canciones.";
+  }
+  showToast(msg, 2000);
+}
+
 function renderLoginBox() {
   document.body.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:98vh;background:#191919">
-      <div style="background:#fff;border-radius:13px;box-shadow:0 2px 22px #0003;padding:2.7em 2.5em;max-width:340px;">
+    <div class="wow-login-bg"></div>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:99vh;position:relative;z-index:2;">
+      <div class="glass-main" style="max-width:340px;min-width:0;padding:2.2em 2.2em;">
         <img src="https://i.imgur.com/sRgWLhM.png" style="display:block;margin:0 auto 20px auto;height:70px;">
-        <h2 style="text-align:center;color:#243857;margin-bottom:24px;">Acceso EDIS</h2>
+        <h2 style="text-align:center;color:#243857;margin-bottom:24px;font-weight:900;">Acceso EDIS</h2>
         <form id="loginform">
           <input type="email" id="login-mail" placeholder="Correo" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
           <input type="password" id="login-pass" placeholder="Contraseña" style="width:100%;margin-bottom:12px;padding:11px;font-size:1.1em;border-radius:7px;border:1px solid #aaa;">
-          <button style="width:100%;background:#243857;color:#fff;padding:11px;border:none;border-radius:7px;font-size:1.1em;cursor:pointer;">Entrar</button>
+          <button class="btn-glass blue" style="width:100%;">Entrar</button>
         </form>
-        <button id="entrar-solo-usuario" style="width:100%;margin-top:13px;background:#eee;color:#243857;padding:11px;border:none;border-radius:7px;font-size:1.04em;cursor:pointer;">
+        <button id="entrar-solo-usuario" class="btn-glass grey" style="width:100%;margin-top:13px;">
           Solo ver como usuario
         </button>
       </div>
     </div>
   `;
+  document.body.style.background = "linear-gradient(120deg,#21294c 0%, #496bff 100%)";
   document.getElementById("loginform").onsubmit = e => {
     e.preventDefault();
     const mail = document.getElementById("login-mail").value.trim();
     const pass = document.getElementById("login-pass").value;
     if (mail === ADMIN_MAIL && pass === "jijijija55") {
-      adminMode = true;
-      currentUser = {email: ADMIN_MAIL};
-      location.reload();
+      localStorage.setItem("edis_adminMode", "true");
+      bienvenida("admin");
+      setTimeout(()=>location.reload(), 800);
     } else {
-      alert("Usuario/contraseña incorrectos");
+      showToast("Usuario/contraseña incorrectos");
     }
   };
   document.getElementById("entrar-solo-usuario").onclick = ()=>{
-    adminMode = false;
-    currentUser = null;
-    location.reload();
+    localStorage.setItem("edis_adminMode", "false");
+    bienvenida("usuario");
+    setTimeout(()=>location.reload(), 800);
   }
 }
 
+// Header top right: Modo y botones rápidos
 function setupAdminUI() {
   const ui = document.getElementById("user-info");
   if (!ui) return;
   if (adminMode) {
     ui.innerHTML = `
       <span style="font-weight:bold;color:#ffe082;">Administrador</span>
-      <button style="margin-left:20px;background:#ffe082;color:#29244b;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="logoutBtn">Salir</button>
-      <button style="margin-left:15px;background:#3b306c;color:#fff;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="verSoloBtn">Ver como usuario</button>
+      <button class="btn-glass gold" id="logoutBtn" style="margin-left:16px;">Salir</button>
+      <button class="btn-glass blue" id="verSoloBtn" style="margin-left:13px;">Ver como usuario</button>
     `;
     document.getElementById("logoutBtn").onclick = ()=>{
-      adminMode = false;
-      currentUser = null;
-      location.reload();
+      localStorage.setItem("edis_adminMode", "false");
+      bienvenida("usuario");
+      setTimeout(()=>location.reload(), 900);
     };
     document.getElementById("verSoloBtn").onclick = ()=>{
-      adminMode = false;
-      currentUser = null;
-      location.reload();
+      localStorage.setItem("edis_adminMode", "false");
+      bienvenida("usuario");
+      setTimeout(()=>location.reload(), 900);
     };
   } else {
     ui.innerHTML = `
-      <span style="color:#eee;">Modo visualización</span>
-      <button style="margin-left:15px;background:#3b306c;color:#fff;padding:7px 19px;border:none;border-radius:8px;font-size:1em;cursor:pointer;" id="loginBtn">Admin</button>
+      <span style="color:#fff;text-shadow:0 1px 6px #0003;">Modo usuario</span>
+      <button class="btn-glass blue" id="loginBtn" style="margin-left:16px;">Admin</button>
     `;
     document.getElementById("loginBtn").onclick = ()=>{
       renderLoginBox();
@@ -71,7 +94,7 @@ function setupAdminUI() {
   }
 }
 
-// --- 2. FIREBASE INIT ---
+// ========== 2. FIREBASE INIT (importa desde CDN) ==========
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
@@ -88,7 +111,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// --- 3. VARIABLES PRINCIPALES Y INSTRUMENTOS ---
+// ========== 3. VARIABLES PRINCIPALES Y INSTRUMENTOS ==========
 const INSTRUMENTS = {
   guitarra: 6, laud: 6, bandurria: 6, mandolina: 4, tricordio: 4, contrabajo: 4, guitarron: 6
 };
@@ -114,7 +137,7 @@ let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
-// --- 4. REFERENCIAS A ELEMENTOS DEL DOM ---
+// ========== 4. ELEMENTOS DEL DOM ==========
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -138,7 +161,7 @@ const lastSavedDiv = document.getElementById("last-saved");
 const ensayoBtn = document.getElementById("ensayo-song");
 const ensayoVivoDiv = document.getElementById("ensayo-vivo");
 
-// --- 5. LISTADO DE CANCIONES ---
+// ========== 5. LISTADO DE CANCIONES ==========
 async function loadSongList() {
   songList = [];
   songListElem.innerHTML = `<li style="color:#fff;padding:1.1em;text-align:center;">Cargando...</li>`;
@@ -212,7 +235,15 @@ function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr];
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-// ============ 2. Tablatura multi-voz + SVG PRO =============
+
+// Toast wow (permite custom duración)
+function showToast(msg, dur=1500) {
+  toast.textContent = msg;
+  toast.classList.add("visible");
+  setTimeout(()=>toast.classList.remove("visible"), dur);
+}
+// ============ 6. INSTRUMENTO, VOZ, TABLATURA SVG WOW =============
+
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
   currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
@@ -377,7 +408,7 @@ function renderTablatureEditorSVG() {
   tablaturaDiv.appendChild(svg);
 }
 
-// ========== 3. Letra y acordes =============
+// ========== 7. Letra y acordes =============
 function renderLetraEditor() {
   letraDiv.innerHTML = "";
   for (let i = 0; i < letraOriginal.length; i++) {
@@ -412,7 +443,7 @@ letraInput.oninput = ()=>{
   acordesArriba = {};
   renderLetraEditor();
 };
-// ========== 4. Rasgueo avanzado ==========
+// ========== 8. Rasgueo visual avanzado ==========
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
   if (instrumentoSel.value !== "guitarra") {
@@ -458,7 +489,7 @@ function renderRasgueoEditor() {
   rasgueoDiv.appendChild(controls);
 }
 
-// ========== 5. AUDIO ==========
+// ========== 9. AUDIO ==============
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -467,7 +498,7 @@ audioUpload.onchange = function (e) {
   audioPlayer.style.display = "";
 };
 
-// ========== 6. NUEVA, CANCELAR, GUARDAR ==========
+// ========== 10. NUEVA, CANCELAR, GUARDAR ==========
 newSongBtn.onclick = () => {
   if (!adminMode) {
     showToast("Sólo el admin puede crear canciones");
@@ -491,7 +522,7 @@ saveBtn.onclick = (e)=>{
   }
 };
 
-// ========== 7. GUARDAR EN FIREBASE ==========
+// ========== 11. GUARDAR EN FIREBASE ==========
 songForm.onsubmit = async function(e) {
   e.preventDefault();
   if(!adminMode) {
@@ -530,7 +561,7 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 
-// ========== 8. AUTOGUARDADO ==============
+// ========== 12. AUTOGUARDADO ==============
 function getCurrentSongData() {
   return {
     titulo: songTitleInput.value,
@@ -556,19 +587,12 @@ setInterval(async ()=>{
   }
 }, 15000);
 
-// ========== 9. PDF ===============
+// ========== 13. PDF ===============
 pdfBtn.onclick = ()=>{
   let seccion = document.getElementById("song-editor-section");
   html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
 };
-
-// ========== 10. TOAST =============
-function showToast(msg) {
-  toast.textContent = msg;
-  toast.classList.add("visible");
-  setTimeout(()=>toast.classList.remove("visible"), 1700);
-}
-// ========== 11. ENSAYO EN VIVO ============
+// ========== 14. ENSAYO EN VIVO WOW ============
 ensayoBtn.onclick = ()=>{
   ensayoVivoDiv.innerHTML = "";
   if (!letraOriginal || letraOriginal.length === 0) {
@@ -583,11 +607,11 @@ ensayoBtn.onclick = ()=>{
   ensayoVivoDiv.innerHTML = `
     <div style="margin:1em 0;">
       <label>Velocidad: <input id="vel-ensayo" type="range" min="100" max="1500" step="50" value="${velocidad}"/> <span id="vel-label">${velocidad} ms</span></label>
-      <button id="btn-iniciar-ensayo" style="margin-left:10px;">Iniciar</button>
-      <button id="btn-pausar-ensayo" style="margin-left:5px;">Pausar</button>
-      <button id="btn-reset-ensayo" style="margin-left:5px;">Reiniciar</button>
+      <button id="btn-iniciar-ensayo" class="btn-glass blue" style="margin-left:10px;">Iniciar</button>
+      <button id="btn-pausar-ensayo" class="btn-glass grey" style="margin-left:5px;">Pausar</button>
+      <button id="btn-reset-ensayo" class="btn-glass gold" style="margin-left:5px;">Reiniciar</button>
     </div>
-    <div id="letra-ensayo" style="font-family:'Menlo',monospace;font-size:1.22em;background:#fff;padding:1.5em;border-radius:8px;min-height:80px;word-break:break-all;"></div>
+    <div id="letra-ensayo" style="font-family:'Menlo',monospace;font-size:1.22em;background:#fff;padding:1.5em;border-radius:8px;min-height:80px;word-break:break-all;box-shadow:0 2px 16px #ffd20018;"></div>
   `;
   const letraEnsayoDiv = document.getElementById("letra-ensayo");
   const velSlider = document.getElementById("vel-ensayo");
@@ -609,6 +633,8 @@ ensayoBtn.onclick = ()=>{
       if (j === i) {
         span.style.background = "#ffe082";
         span.style.color = "#29244b";
+        span.style.transition = "background .18s, color .17s";
+        span.style.boxShadow = "0 2px 18px #ffe08266";
       }
       letraEnsayoDiv.appendChild(span);
     }
@@ -624,6 +650,7 @@ ensayoBtn.onclick = ()=>{
     } else {
       corriendo = false;
       idx = 0;
+      showToast("¡Ensayo finalizado!", 1700);
     }
   }
 
@@ -645,7 +672,7 @@ ensayoBtn.onclick = ()=>{
   renderLetraEnsayo(idx);
 };
 
-// ========== 12. INICIO ==========
+// ========== 15. ARRANQUE DE LA APP ==============
 if (!adminMode && !currentUser) {
   renderLoginBox();
 } else {

@@ -5,21 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Cancionero EDIS (División Ingeniería)</title>
   <link rel="stylesheet" href="styles.css"/>
+  <link rel="icon" href="https://i.imgur.com/sRgWLhM.png" />
 </head>
 <body>
   <header>
-    <div class="header-bg">
-      <img src="https://i.imgur.com/N6rdt5B.png" alt="Logo EDIS" class="logo"/>
-      <h1>Cancionero Estudiantina EDIS</h1>
+    <div class="header-bg glass-hero">
+      <img src="https://i.imgur.com/sRgWLhM.png" alt="Logo Estudiantina" class="logo"/>
+      <h1 class="wow-title">Cancionero Estudiantina EDIS</h1>
       <div id="user-info"></div>
     </div>
   </header>
   <main>
     <aside id="song-list-container">
-      <button id="new-song-btn">+ Nueva canción</button>
+      <button id="new-song-btn" class="btn-glass">+ Nueva canción</button>
       <ul id="song-list"></ul>
     </aside>
-    <section id="song-editor-section">
+    <section id="song-editor-section" class="glass-main">
       <form id="song-form" autocomplete="off">
         <label>
           Título:
@@ -52,8 +53,8 @@
           </h3>
           <div id="tabs-voz-btns"></div>
           <div id="tablatura"></div>
-          <button id="add-col" type="button">+ Tiempo</button>
-          <button id="del-col" type="button">- Tiempo</button>
+          <button id="add-col" type="button" class="btn-glass">+ Tiempo</button>
+          <button id="del-col" type="button" class="btn-glass">- Tiempo</button>
         </div>
         <div class="editor-group">
           <h3>Editor de Rasgueo (sólo guitarra)</h3>
@@ -64,10 +65,10 @@
           <div id="letra"></div>
         </div>
         <div style="margin-top:18px;">
-          <button id="save-song" type="submit">Guardar canción</button>
-          <button id="pdf-song" type="button" style="background:#e39d1b;">Exportar PDF</button>
-          <button id="ensayo-song" type="button" style="background:#2196f3;">Ensayar en vivo</button>
-          <button id="cancel-edit" type="button" style="background:#888;margin-left:8px;">Cancelar</button>
+          <button id="save-song" type="submit" class="btn-glass">Guardar canción</button>
+          <button id="pdf-song" type="button" class="btn-glass gold">Exportar PDF</button>
+          <button id="ensayo-song" type="button" class="btn-glass blue">Ensayar en vivo</button>
+          <button id="cancel-edit" type="button" class="btn-glass grey" style="margin-left:8px;">Cancelar</button>
         </div>
         <div id="last-saved" style="font-size:0.95em; color:#999;margin-top:6px;"></div>
       </form>
