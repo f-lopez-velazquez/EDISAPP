@@ -689,19 +689,24 @@ songForm.onsubmit = async function(e) {
     rasgueo: instrumentoSel.value==="guitarra"?rasgueoArr:[],
     audioUrl
   };
+  let docRef, savedId;
   if (isNew) {
-    const newRef = await addDoc(collection(db,"canciones"), data);
+    docRef = await addDoc(collection(db,"canciones"), data);
     showToast("Canción agregada");
-    currentSong = {id:newRef.id,...data};
+    savedId = docRef.id;
+    isNew = false;
   } else if (currentSong) {
     await setDoc(doc(db,"canciones",currentSong.id), data);
     showToast("Canción actualizada");
-    currentSong = {...data, id:currentSong.id};
+    savedId = currentSong.id;
   }
   await loadSongList();
+  // Siempre selecciona y llena el editor con el último guardado (¡NUNCA clearEditor aquí!)
+  currentSong = songList.find(s=>s.id===savedId);
   fillFormFromSong(currentSong);
   lastSavedData = JSON.stringify(data);
 };
+
 
 // ========== 12. AUTOGUARDADO ==========
 function getCurrentSongData() {
