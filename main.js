@@ -1,11 +1,8 @@
-// ========== 1. LOGIN WOW, ROLES, ADMIN =============
-
-// Admin hardcode: edis.ugto@gmail.com / jijijija55
+// ========== 1. LOGIN, ROLES, ADMIN, MENSAJE WOW =============
 const ADMIN_MAIL = "edis.ugto@gmail.com";
 let adminMode = false;
 let currentUser = null;
 
-// Checa localStorage para mantener sesión tras reload:
 if (localStorage.getItem("edis_adminMode") === "true") {
   adminMode = true;
   currentUser = {email: ADMIN_MAIL};
@@ -14,7 +11,6 @@ if (localStorage.getItem("edis_adminMode") === "true") {
   currentUser = null;
 }
 
-// Mensaje WOW
 function bienvenida(mode) {
   let msg = "";
   if (mode === "admin") {
@@ -63,7 +59,6 @@ function renderLoginBox() {
   }
 }
 
-// Header top right: Modo y botones rápidos
 function setupAdminUI() {
   const ui = document.getElementById("user-info");
   if (!ui) return;
@@ -94,7 +89,7 @@ function setupAdminUI() {
   }
 }
 
-// ========== 2. FIREBASE INIT (importa desde CDN) ==========
+// ========== 2. FIREBASE INIT ==========
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
 import { getFirestore, collection, doc, getDocs, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js";
@@ -111,7 +106,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ========== 3. VARIABLES PRINCIPALES Y INSTRUMENTOS ==========
+// ========== 3. VARIABLES ==========
 const INSTRUMENTS = {
   guitarra: 6, laud: 6, bandurria: 6, mandolina: 4, tricordio: 4, contrabajo: 4, guitarron: 6
 };
@@ -129,7 +124,7 @@ const DEFAULT_BEATS = 16;
 let songList = [];
 let currentSong = null;
 let isNew = false;
-let tabData = {}; // {voz: matriz}
+let tabData = {};
 let letraOriginal = "";
 let acordesArriba = {};
 let rasgueoArr = [];
@@ -137,7 +132,7 @@ let currentVoice = "Principal";
 let currentInstrument = "guitarra";
 let lastSavedData = "";
 
-// ========== 4. ELEMENTOS DEL DOM ==========
+// ========== 4. ELEMENTOS DOM ==========
 const songListElem = document.getElementById("song-list");
 const songForm = document.getElementById("song-form");
 const songTitleInput = document.getElementById("song-title");
@@ -235,22 +230,21 @@ function createEmptyTab(instr, beats) {
   const strings = INSTRUMENTS[instr];
   return Array(strings).fill().map(() => Array(beats).fill(""));
 }
-
-// Toast wow (permite custom duración)
 function showToast(msg, dur=1500) {
   toast.textContent = msg;
   toast.classList.add("visible");
   setTimeout(()=>toast.classList.remove("visible"), dur);
 }
-// ============ 6. INSTRUMENTO, VOZ, TABLATURA SVG WOW =============
 
+// ============ 6. INSTRUMENTO, VOZ, TABLATURA SVG WOW =============
 instrumentoSel.onchange = () => {
   currentInstrument = instrumentoSel.value;
-  currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
-  if(!tabData) tabData = {};
+  // Regenera la estructura al cambiar instrumento
+  tabData = {};
   for(const voz of (VOICES[currentInstrument]||["Principal"])) {
-    if(!tabData[voz]) tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
+    tabData[voz] = createEmptyTab(currentInstrument, DEFAULT_BEATS);
   }
+  currentVoice = (VOICES[currentInstrument]||["Principal"])[0];
   renderTabsVozBtns(currentInstrument);
   renderTablatureEditorSVG();
   renderRasgueoEditor();
@@ -279,129 +273,195 @@ delColBtn.onclick = () => {
     renderTablatureEditorSVG();
   }
 };
-// ======= SVG Tablatura PRO (círculo sobre cuerda, trino, etc) ==========
+
+// --- SVG DE TABLATURA WOW (círculo centrado, símbolos pro, para 6 y 4 cuerdas, etc) ---
 function renderTablatureEditorSVG() {
   tablaturaDiv.innerHTML = "";
   const t = tabData[currentVoice];
   if (!t) { tablaturaDiv.textContent = "No hay tablatura."; return; }
   const numStrings = t.length;
   const numBeats = t[0].length;
-  const width = 48 * numBeats + 10;
-  const height = 30 * (numStrings-1) + 30;
+  const IS_4C = (numStrings === 4);
+
+  const W = 48 * numBeats + 28;
+  const H = 30 * (numStrings-1) + 38;
 
   let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height);
+  svg.setAttribute("width", W);
+  svg.setAttribute("height", H);
   svg.style.background = "#fafafc";
   svg.style.borderRadius = "10px";
   svg.style.boxShadow = "0 2px 10px #0001";
 
   // Cuerdas
   for (let s = 0; s < numStrings; s++) {
-    let y = 15 + s*30;
+    let y = 19 + s*30;
     let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-    line.setAttribute("x1", 0);
+    line.setAttribute("x1", 18);
     line.setAttribute("y1", y);
-    line.setAttribute("x2", width);
+    line.setAttribute("x2", W-12);
     line.setAttribute("y2", y);
     line.setAttribute("stroke", "#bbb");
-    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke-width", IS_4C ? "2.7" : "2.2");
     svg.appendChild(line);
   }
-  // Líneas verticales tenues
-  for (let b = 0; b < numBeats; b++) {
-    let x = 24 + b*48;
+  // Tiempos/trastes
+  for (let b = 0; b <= numBeats; b++) {
+    let x = 28 + b*48;
     let vline = document.createElementNS("http://www.w3.org/2000/svg","line");
     vline.setAttribute("x1", x);
-    vline.setAttribute("y1", 10);
+    vline.setAttribute("y1", 12);
     vline.setAttribute("x2", x);
-    vline.setAttribute("y2", height-10);
+    vline.setAttribute("y2", H-18);
     vline.setAttribute("stroke", "#e0deee");
-    vline.setAttribute("stroke-width", "1");
+    vline.setAttribute("stroke-width", "1.1");
     svg.appendChild(vline);
   }
-  // Números/círculos
+  // Números de tiempo/traste
+  for (let b = 0; b < numBeats; b++) {
+    let x = 28 + b*48 + 24;
+    let txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+    txt.setAttribute("x", x);
+    txt.setAttribute("y", 18);
+    txt.setAttribute("text-anchor", "middle");
+    txt.setAttribute("fill", "#bdbdbd");
+    txt.setAttribute("font-size", "12");
+    txt.textContent = (b+1);
+    svg.appendChild(txt);
+  }
+
+  // Círculos/símbolos
   for (let s = 0; s < numStrings; s++) {
-    let y = 15 + s*30;
+    let y = 19 + s*30;
     for (let b = 0; b < numBeats; b++) {
       let valObj = t[s][b];
-      let val = "", trino = false;
+      let val = "", trino = false, tipo = "dot";
       if(typeof valObj === "object" && valObj) {
         val = valObj.val;
         trino = !!valObj.trino;
+        tipo = valObj.tipo || "dot";
       } else {
         val = valObj;
       }
+      let x = 28 + b*48 + 24;
       if(val) {
-        let x = 24 + b*48;
-        let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        g.style.cursor = adminMode ? "pointer" : "default";
-        let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", x);
-        circle.setAttribute("cy", y);
-        circle.setAttribute("r", 13);
-        circle.setAttribute("fill", "#3b306c");
-        circle.setAttribute("stroke", "#e7e5f1");
-        circle.setAttribute("stroke-width", "2");
-        g.appendChild(circle);
+        // Símbolos especiales:
+        if(val==="↑" || tipo==="flechaU") {
+          let flecha = document.createElementNS("http://www.w3.org/2000/svg","text");
+          flecha.setAttribute("x", x); flecha.setAttribute("y", y+7);
+          flecha.setAttribute("text-anchor","middle");
+          flecha.setAttribute("font-size","22");
+          flecha.setAttribute("fill","#007aff");
+          flecha.textContent = "↑";
+          svg.appendChild(flecha);
+        } else if(val==="↓" || tipo==="flechaD") {
+          let flecha = document.createElementNS("http://www.w3.org/2000/svg","text");
+          flecha.setAttribute("x", x); flecha.setAttribute("y", y+10);
+          flecha.setAttribute("text-anchor","middle");
+          flecha.setAttribute("font-size","22");
+          flecha.setAttribute("fill","#d99400");
+          flecha.textContent = "↓";
+          svg.appendChild(flecha);
+        } else if(val==="X" || tipo==="muteo") {
+          let muteo = document.createElementNS("http://www.w3.org/2000/svg","text");
+          muteo.setAttribute("x", x); muteo.setAttribute("y", y+8);
+          muteo.setAttribute("text-anchor","middle");
+          muteo.setAttribute("font-size","19");
+          muteo.setAttribute("fill","#c91432");
+          muteo.setAttribute("font-weight","bold");
+          muteo.textContent = "𝄽";
+          svg.appendChild(muteo);
+        } else if(val==="B" || tipo==="bajeo") {
+          let bass = document.createElementNS("http://www.w3.org/2000/svg","text");
+          bass.setAttribute("x", x); bass.setAttribute("y", y+9);
+          bass.setAttribute("text-anchor","middle");
+          bass.setAttribute("font-size","20");
+          bass.setAttribute("fill","#44a947");
+          bass.setAttribute("font-weight","bold");
+          bass.textContent = "B";
+          svg.appendChild(bass);
+        } else {
+          let g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          g.style.cursor = adminMode ? "pointer" : "default";
+          let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", x);
+          circle.setAttribute("cy", y);
+          circle.setAttribute("r", 13);
+          circle.setAttribute("fill", "#3b306c");
+          circle.setAttribute("stroke", "#e7e5f1");
+          circle.setAttribute("stroke-width", "2");
+          g.appendChild(circle);
 
-        let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        txt.setAttribute("x", x);
-        txt.setAttribute("y", y+5);
-        txt.setAttribute("text-anchor", "middle");
-        txt.setAttribute("fill", "#fff");
-        txt.setAttribute("font-size", "17");
-        txt.setAttribute("font-weight", "bold");
-        txt.textContent = val;
-        g.appendChild(txt);
+          let txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          txt.setAttribute("x", x);
+          txt.setAttribute("y", y+5);
+          txt.setAttribute("text-anchor", "middle");
+          txt.setAttribute("fill", "#fff");
+          txt.setAttribute("font-size", "17");
+          txt.setAttribute("font-weight", "bold");
+          txt.textContent = val;
+          g.appendChild(txt);
 
-        if(trino) {
-          let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          trinoTxt.setAttribute("x", x);
-          trinoTxt.setAttribute("y", y-15);
-          trinoTxt.setAttribute("text-anchor", "middle");
-          trinoTxt.setAttribute("fill", "#eb9b00");
-          trinoTxt.setAttribute("font-size", "22");
-          trinoTxt.setAttribute("font-weight", "bold");
-          trinoTxt.textContent = "~";
-          g.appendChild(trinoTxt);
+          if(trino) {
+            let trinoTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            trinoTxt.setAttribute("x", x);
+            trinoTxt.setAttribute("y", y-15);
+            trinoTxt.setAttribute("text-anchor", "middle");
+            trinoTxt.setAttribute("fill", "#eb9b00");
+            trinoTxt.setAttribute("font-size", "22");
+            trinoTxt.setAttribute("font-weight", "bold");
+            trinoTxt.textContent = "~";
+            g.appendChild(trinoTxt);
+          }
+          if (adminMode) {
+            g.onclick = (e) => {
+              e.stopPropagation();
+              let nuevo = prompt(
+                "Número de dedo/traste (o símbolos: ↑ = flecha arriba, ↓ = flecha abajo, X = muteo, B = bajeo, ~ = trino)\nVacío para quitar:",
+                val
+              );
+              if(nuevo!==null && nuevo!=="") {
+                let setTrino = false, tipo = "dot";
+                if (nuevo==="~") { setTrino = true; nuevo = ""; }
+                if (nuevo==="↑") tipo="flechaU";
+                if (nuevo==="↓") tipo="flechaD";
+                if (nuevo==="X") tipo="muteo";
+                if (nuevo==="B") tipo="bajeo";
+                t[s][b] = {val: nuevo, trino: setTrino, tipo};
+              } else if(nuevo==="") {
+                t[s][b] = "";
+              }
+              renderTablatureEditorSVG();
+            };
+          }
+          svg.appendChild(g);
         }
-        if (adminMode) {
-          g.onclick = (e) => {
-            e.stopPropagation();
-            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", val);
-            if(nuevo!==null && nuevo!=="") {
-              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-              t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
-            } else if(nuevo==="") {
-              t[s][b] = "";
-            }
-            renderTablatureEditorSVG();
-          };
-        }
-        svg.appendChild(g);
-      } else {
-        // Click sobre la cuerda vacía
-        let x = 24 + b*48;
-        if (adminMode) {
-          let clickArea = document.createElementNS("http://www.w3.org/2000/svg","rect");
-          clickArea.setAttribute("x", x-13);
-          clickArea.setAttribute("y", y-13);
-          clickArea.setAttribute("width", 26);
-          clickArea.setAttribute("height", 26);
-          clickArea.setAttribute("fill", "rgba(255,255,255,0)");
-          clickArea.style.cursor = "pointer";
-          clickArea.onclick = (e) => {
-            e.stopPropagation();
-            let nuevo = prompt("Número de dedo/traste (vacío para quitar):", "");
-            if(nuevo!==null && nuevo!=="") {
-              let setTrino = confirm("¿Agregar trino? (Aceptar=Sí, Cancelar=No)");
-              t[s][b] = setTrino ? {val: nuevo, trino:true} : nuevo;
-            }
-            renderTablatureEditorSVG();
-          };
-          svg.appendChild(clickArea);
-        }
+      } else if (adminMode) {
+        let clickArea = document.createElementNS("http://www.w3.org/2000/svg","rect");
+        clickArea.setAttribute("x", x-13);
+        clickArea.setAttribute("y", y-13);
+        clickArea.setAttribute("width", 26);
+        clickArea.setAttribute("height", 26);
+        clickArea.setAttribute("fill", "rgba(255,255,255,0)");
+        clickArea.style.cursor = "pointer";
+        clickArea.onclick = (e) => {
+          e.stopPropagation();
+          let nuevo = prompt(
+            "Número de dedo/traste (o símbolos: ↑ = flecha arriba, ↓ = flecha abajo, X = muteo, B = bajeo, ~ = trino)\nVacío para quitar:",
+            ""
+          );
+          if(nuevo!==null && nuevo!=="") {
+            let setTrino = false, tipo = "dot";
+            if (nuevo==="~") { setTrino = true; nuevo = ""; }
+            if (nuevo==="↑") tipo="flechaU";
+            if (nuevo==="↓") tipo="flechaD";
+            if (nuevo==="X") tipo="muteo";
+            if (nuevo==="B") tipo="bajeo";
+            t[s][b] = {val: nuevo, trino: setTrino, tipo};
+          }
+          renderTablatureEditorSVG();
+        };
+        svg.appendChild(clickArea);
       }
     }
   }
@@ -443,6 +503,7 @@ letraInput.oninput = ()=>{
   acordesArriba = {};
   renderLetraEditor();
 };
+
 // ========== 8. Rasgueo visual avanzado ==========
 function renderRasgueoEditor() {
   rasgueoDiv.innerHTML = "";
@@ -489,7 +550,7 @@ function renderRasgueoEditor() {
   rasgueoDiv.appendChild(controls);
 }
 
-// ========== 9. AUDIO ==============
+// ========== 9. AUDIO ==========
 audioUpload.onchange = function (e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -561,7 +622,7 @@ songForm.onsubmit = async function(e) {
   lastSavedData = JSON.stringify(data);
 };
 
-// ========== 12. AUTOGUARDADO ==============
+// ========== 12. AUTOGUARDADO ==========
 function getCurrentSongData() {
   return {
     titulo: songTitleInput.value,
@@ -587,19 +648,51 @@ setInterval(async ()=>{
   }
 }, 15000);
 
-// ========== 13. PDF ===============
+// ========== 13. PDF WOW: SVG como imagen ==============
 pdfBtn.onclick = ()=>{
   let seccion = document.getElementById("song-editor-section");
-  html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
+  let svgEl = tablaturaDiv.querySelector("svg");
+  if(svgEl){
+    let svgData = new XMLSerializer().serializeToString(svgEl);
+    let img = new Image();
+    let svg64 = btoa(unescape(encodeURIComponent(svgData)));
+    let imgSrc = 'data:image/svg+xml;base64,' + svg64;
+    img.onload = function() {
+      const pdf = new window.jspdf.jsPDF({unit:"pt", format:"a4"});
+      let y = 38;
+      pdf.setFont("helvetica","bold"); pdf.text(songTitleInput.value||"", 40, y);
+      y+=20; pdf.setFont("helvetica","normal");
+      pdf.text("Letra:",40,y); y+=18;
+      pdf.setFontSize(11); pdf.text((letraInput.value||"").substring(0,1400), 46, y, {maxWidth: 520});
+      y += 90;
+      pdf.text("Tablatura:",40,y); y+=10;
+      pdf.addImage(img, "PNG", 60, y, 420, 80+30*(svgEl.childNodes.length/2));
+      y+=110;
+      pdf.setFontSize(10);
+      pdf.text("Letra y acordes:",40,y); y+=13;
+      let letra = letraInput.value||"";
+      let acArr = acordesArriba || {};
+      let row = "";
+      for(let i=0;i<letra.length;i++){
+        row += (acArr[i]?`[${acArr[i]}]`:" ")+letra[i];
+        if(letra[i]==="\n" || row.length>55) { pdf.text(row,46,y); y+=13; row=""; }
+      }
+      if(row) pdf.text(row,46,y);
+      pdf.save((songTitleInput.value||"cancion")+".pdf");
+    };
+    img.src = imgSrc;
+  } else {
+    html2pdf().from(seccion).save((songTitleInput.value||"cancion")+".pdf");
+  }
 };
-// ========== 14. ENSAYO EN VIVO WOW ============
+
+// ========== 14. ENSAYO EN VIVO ============
 ensayoBtn.onclick = ()=>{
   ensayoVivoDiv.innerHTML = "";
   if (!letraOriginal || letraOriginal.length === 0) {
     showToast("Agrega una letra para ensayar en vivo");
     return;
   }
-  // Opciones: velocidad, iniciar/pausar, resalta letra y acorde actuales
   let velocidad = 500;
   let corriendo = false;
   let idx = 0;
@@ -672,7 +765,7 @@ ensayoBtn.onclick = ()=>{
   renderLetraEnsayo(idx);
 };
 
-// ========== 15. ARRANQUE DE LA APP ==============
+// ========== 15. ARRANQUE ==========
 if (!adminMode && !currentUser) {
   renderLoginBox();
 } else {
